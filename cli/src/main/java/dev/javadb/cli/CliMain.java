@@ -1,0 +1,62 @@
+package dev.javadb.cli;
+
+import dev.javadb.engine.EmbeddedDatabaseEngine;
+import dev.javadb.engine.EngineApi;
+import dev.javadb.engine.LaunchConfig;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.nio.file.Path;
+
+public final class CliMain {
+    private CliMain() {
+    }
+
+    public static void main(String[] args) throws Exception {
+        LaunchConfig config = resolveConfig(args);
+        applyReferenceParserSettings(config);
+        try (EngineApi.DatabaseEngine engine = EmbeddedDatabaseEngine.open(config.databaseConfig());
+             EngineApi.Session session = engine.openSession();
+             BufferedReader reader = new BufferedReader(new InputStreamReader(System.in))) {
+            StringBuilder buffer = new StringBuilder();
+            while (true) {
+                System.out.print(buffer.isEmpty() ? "javadb> " : "....> ");
+                String line = reader.readLine();
+                if (line == null || line.equalsIgnoreCase("quit") || line.equalsIgnoreCase("exit")) {
+                    break;
+                }
+                buffer.append(line).append('\n');
+                if (!line.trim().endsWith(";")) {
+                    continue;
+                }
+                EngineApi.BatchResult result = session.execute(buffer.toString());
+                buffer.setLength(0);
+                for (EngineApi.StatementResult statement : result.statements()) {
+                    System.out.println(statement.commandTag() + " " + statement.updateCount());
+                    if (!statement.explainPlan().isBlank()) {
+                        System.out.println("plan: " + statement.explainPlan());
+                    }
+                    if (!statement.batch().rows().isEmpty()) {
+                        System.out.println(statement.batch().columns());
+                        statement.batch().rows().forEach(row -> System.out.println(row.values()));
+                    }
+                }
+            }
+        }
+    }
+
+    private static LaunchConfig resolveConfig(String[] args) {
+        if (args.length >= 2 && "--config".equalsIgnoreCase(args[0])) {
+            return LaunchConfig.load(Path.of(args[1]));
+        }
+        Path home = args.length > 0 ? Path.of(args[0]) : Path.of("./db-home");
+        return LaunchConfig.defaults(home);
+    }
+
+    private static void applyReferenceParserSettings(LaunchConfig config) {
+        System.setProperty("javadb.sql.referenceParser.mode", config.referenceParserMode());
+        if (config.referenceParserHome() != null) {
+            System.setProperty("javadb.sql.referenceParser.home", config.referenceParserHome().toString());
+        }
+    }
+}

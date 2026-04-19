@@ -1,0 +1,15 @@
+.gradle/
+.bootstrap/
+build/
+**/build/
+**/.gradle/
+*.log
+*.tmp
+*.bak
+*.class
+hs_err_pid*
+*.hprof
+.idea/
+*.iml
+out/
+installer/build/
