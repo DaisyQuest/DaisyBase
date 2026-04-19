@@ -116,6 +116,10 @@ final class JavaDbPreparedSql {
             if (value == null) {
                 return new BoundParameter("NULL");
             }
+            String nativeLiteral = JavaDbJdbcObjects.nativeParameterLiteral(value, sqlType);
+            if (nativeLiteral != null) {
+                return new BoundParameter(nativeLiteral);
+            }
             if (value instanceof Integer || value instanceof Long || value instanceof Short || value instanceof Byte) {
                 return new BoundParameter(String.valueOf(((Number) value).longValue()));
             }

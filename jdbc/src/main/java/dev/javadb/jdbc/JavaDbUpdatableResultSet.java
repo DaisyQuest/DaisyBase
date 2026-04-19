@@ -163,7 +163,7 @@ final class JavaDbUpdatableResultSet {
             return values;
         }
 
-        private void applyGeneratedKeys(Common.TupleBatch generatedKeys, List<Object> values) {
+        private void applyGeneratedKeys(Common.TupleBatch generatedKeys, List<Object> values) throws SQLException {
             if (generatedKeys == null || generatedKeys.columns().isEmpty() || generatedKeys.rows().isEmpty()) {
                 return;
             }
@@ -214,6 +214,12 @@ final class JavaDbUpdatableResultSet {
                 case BIGINT -> Types.BIGINT;
                 case BOOLEAN -> Types.BOOLEAN;
                 case TEXT -> Types.VARCHAR;
+                case BLOB -> Types.BLOB;
+                case ARRAY -> Types.ARRAY;
+                case STRUCT -> Types.STRUCT;
+                case REF -> Types.REF;
+                case ROWID -> Types.ROWID;
+                case SQLXML -> Types.SQLXML;
                 case DECIMAL -> Types.DECIMAL;
                 case DATE -> Types.DATE;
                 case TIME -> Types.TIME;
@@ -249,20 +255,8 @@ final class JavaDbUpdatableResultSet {
             }
         }
 
-        private Object jdbcValue(Common.Value value) {
-            if (value == null || value.isNull()) {
-                return null;
-            }
-            return switch (value.type()) {
-                case INTEGER -> value.asInt();
-                case BIGINT -> value.asLong();
-                case BOOLEAN -> value.asBoolean();
-                case TEXT -> value.asText();
-                case DECIMAL -> value.asDecimal();
-                case DATE -> java.sql.Date.valueOf(value.asDate());
-                case TIME -> java.sql.Time.valueOf(value.asTime());
-                case TIMESTAMP -> Timestamp.valueOf(value.asTimestamp());
-            };
+        private Object jdbcValue(Common.Value value) throws SQLException {
+            return JavaDbJdbcObjects.toJdbcValue(value);
         }
     }
 }

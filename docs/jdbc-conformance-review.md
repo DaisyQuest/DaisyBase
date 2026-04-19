@@ -21,8 +21,8 @@ The driver is now credible for a practical JDBC 4.3 subset:
 - `Statement`, `PreparedStatement`, and `CallableStatement` work on the current engine surface
 - identity-backed generated keys are real
 - savepoints, transaction control, timeout, and cooperative cancel work
-- optional static remote authentication is enforced at the protocol handshake
-- bounded single-branch XA coordination works for embedded and remote sessions
+- catalog-backed remote authentication and role/grant authorization are enforced at the protocol and session layers
+- durable prepared-branch XA recovery works for embedded and remote sessions
 - metadata for schemas, tables, columns, indexes, procedures, and functions is implemented
 - non-callable prepared parameter metadata is now server-described and type-aware
 - scroll-insensitive updatable result sets work for single-table primary-key-backed queries
@@ -70,19 +70,19 @@ The driver is now credible for a practical JDBC 4.3 subset:
    Impact:
    - `Blob`, `Array`, `Struct`, `Ref`, and `RowId` factories or accessors could not round-trip through supported `TEXT` columns and callable outputs
    Resolution:
-   - the driver now provides disconnected wrappers and text-encoded parameter/result/output handling for those JDBC object families
+   - the driver now provides disconnected wrappers plus native engine value handling for `BLOB`, `ARRAY`, `STRUCT`, `REF`, `ROWID`, and `SQLXML`, while preserving deterministic `TEXT` encodings for compatibility columns
 
 7. Remote authentication was previously ignored.
    Impact:
    - `user` and `password` were accepted for compatibility but never enforced by the server
    Resolution:
-   - the remote handshake now carries credentials and the server can require static configured credentials
+   - the remote handshake now authenticates against catalog-backed users, and sessions enforce role/grant authorization on table, routine, and catalog-admin operations
 
 8. XA remained unavailable.
    Impact:
    - coordinators expecting `XADataSource` integration could not enlist JavaDB at all
    Resolution:
-   - the driver now exposes a bounded single-branch `XADataSource` / `XAConnection` / `XAResource` implementation over one JavaDB connection
+   - the driver now exposes a durable prepared-branch `XADataSource` / `XAConnection` / `XAResource` implementation with recovery scans and restart-safe two-phase commit/rollback
 
 ## Current Conformance Status
 
@@ -90,7 +90,7 @@ The driver is now credible for a practical JDBC 4.3 subset:
 
 - `Driver`, `DataSource`
 - embedded and remote `Connection`
-- `XADataSource`, `XAConnection`, and bounded `XAResource`
+- `XADataSource`, `XAConnection`, and durable recoverable `XAResource`
 - `Statement`
 - `PreparedStatement`
 - `CallableStatement` for SQL-backed procedures/functions
@@ -106,47 +106,43 @@ The driver is now credible for a practical JDBC 4.3 subset:
 - non-callable prepared `ParameterMetaData`
 - `Connection.createClob/createNClob/createBlob/createSQLXML/createArrayOf/createStruct`
 - text-backed `Clob`/`NClob`/`SQLXML` parameter binding and result/output accessors
-- text-encoded `Blob`/`Array`/`Struct`/`Ref`/`RowId` parameter binding and result/output accessors
-- optional static remote authentication
+- native and compatibility `Blob`/`Array`/`Struct`/`Ref`/`RowId` parameter binding and result/output accessors
+- catalog-backed remote authentication and authorization
 
 ### Implemented With Deliberate Limits
 
 - result sets are disconnected cached row sets
   - simple single-table queries can be updatable
   - more complex joins, grouping, expression projections, and queries without projected primary-key coverage remain read-only
-- `Clob`, `NClob`, `SQLXML`, `Blob`, `Array`, `Struct`, `Ref`, and `RowId` are wrappers over `TEXT`
-  - the engine still has no separate large-object, collection, reference, or XML storage types
-  - binary/blob, array, struct, ref, and row-id round trips are implemented by deterministic text encoding rather than native on-disk types
+- JDBC object families support two lanes
+  - native engine column types (`BLOB`, `ARRAY`, `STRUCT`, `REF`, `ROWID`, `SQLXML`) now round-trip as native engine values
+  - compatibility `TEXT` columns still support deterministic wrapper encodings for legacy tests and applications
 - timeout/cancel is cooperative
   - long-running execution loops check cancellation and deadlines
   - the driver does not preempt arbitrary blocking code outside those checkpoints
-- authentication is static and connection-scoped
-  - the server can require one configured user/password pair
-  - there is no user catalog, password hashing, or authorization model yet
-- XA is bounded
-  - one `XAResource` maps to one JavaDB connection/session
-  - prepare/commit/rollback are supported for one branch at a time
-  - recovery scans and crash-resilient distributed transaction logs are not implemented
+- authentication is catalog-backed and connection-scoped
+  - the server authenticates against catalog users with hashed passwords
+  - sessions enforce explicit grants, including role-derived grants
+- XA remains bounded
+  - one `XAResource` still maps to one JavaDB connection/session at a time
+  - durable prepare/recover/commit/rollback are implemented
+  - interleaved multi-branch work on one connection and full distributed transaction manager integration remain out of scope
 
 ## Remaining Gaps
 
 These are real JDBC conformance gaps that remain after this pass:
 
-1. Engine-native JDBC object types
-   - current status: JDBC object families round-trip through `TEXT`
-   - missing work: true engine and protocol support for native binary/blob, array, struct, ref, row-id, and XML storage
-
-2. Durable distributed XA recovery
-   - current status: bounded single-branch XA works through one live connection
-   - missing work: prepared-transaction persistence, recovery scans, interleaved branches, and crash-recoverable distributed transaction logs
-
-3. Rich authentication and authorization
-   - current status: optional static remote handshake authentication
-   - missing work: catalog-backed users, password hashing, roles, grants, and authorization checks
-
-4. Full metadata breadth
+1. Full metadata breadth
    - current status: common framework probes are covered
    - some less common `DatabaseMetaData` result-set methods remain intentionally empty or unsupported
+
+2. Rich SQL security breadth
+   - current status: catalog users, roles, and explicit grants are enforced
+   - missing work: broader SQL security syntax, ownership semantics, revocation, and fine-grained schema-level policy
+
+3. XA breadth
+   - current status: durable prepare/recover/commit/rollback works for one branch per connection
+   - missing work: interleaved branches on one handle and broader transaction-manager interoperability hardening
 
 ## Release Position
 

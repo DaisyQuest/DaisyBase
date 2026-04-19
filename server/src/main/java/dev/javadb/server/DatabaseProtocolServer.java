@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -29,28 +30,23 @@ final class DatabaseProtocolServer implements AutoCloseable {
     private final AtomicBoolean closed = new AtomicBoolean();
     private final AtomicReference<Throwable> acceptFailure = new AtomicReference<>();
     private final ConcurrentHashMap<String, SessionState> sessions = new ConcurrentHashMap<>();
-    private final Authentication authentication;
 
-    private DatabaseProtocolServer(EngineApi.DatabaseEngine engine, ServerSocket serverSocket, int maxFrameBytes,
-                                   Authentication authentication) {
+    private DatabaseProtocolServer(EngineApi.DatabaseEngine engine, ServerSocket serverSocket, int maxFrameBytes) {
         this.engine = Objects.requireNonNull(engine, "engine");
         this.serverSocket = Objects.requireNonNull(serverSocket, "serverSocket");
         this.maxFrameBytes = maxFrameBytes;
-        this.authentication = authentication == null ? Authentication.disabled() : authentication;
         this.acceptThread = Thread.ofPlatform().name("javadb-server-accept").start(this::acceptLoop);
     }
 
     static DatabaseProtocolServer start(EngineApi.DatabaseEngine engine, int port) throws IOException {
         ServerSocket serverSocket = new ServerSocket(port);
-        return new DatabaseProtocolServer(engine, serverSocket, RemoteProtocol.DEFAULT_MAX_FRAME_BYTES,
-                Authentication.disabled());
+        return new DatabaseProtocolServer(engine, serverSocket, RemoteProtocol.DEFAULT_MAX_FRAME_BYTES);
     }
 
     static DatabaseProtocolServer start(EngineApi.DatabaseEngine engine, int port,
                                         String user, String password) throws IOException {
         ServerSocket serverSocket = new ServerSocket(port);
-        return new DatabaseProtocolServer(engine, serverSocket, RemoteProtocol.DEFAULT_MAX_FRAME_BYTES,
-                Authentication.required(user, password));
+        return new DatabaseProtocolServer(engine, serverSocket, RemoteProtocol.DEFAULT_MAX_FRAME_BYTES);
     }
 
     int port() {
@@ -103,14 +99,16 @@ final class DatabaseProtocolServer implements AutoCloseable {
 
     private void handleClient(Socket socket) {
         String sessionToken = UUID.randomUUID().toString();
-        SessionState sessionState = new SessionState(engine.openSession());
-        sessions.put(sessionToken, sessionState);
+        SessionState sessionState = null;
         try (socket;
              BufferedInputStream input = new BufferedInputStream(socket.getInputStream());
              BufferedOutputStream output = new BufferedOutputStream(socket.getOutputStream())) {
-            if (!performHandshake(input, output, sessionToken)) {
+            String principal = performHandshake(input, output, sessionToken);
+            if (principal == null) {
                 return;
             }
+            sessionState = new SessionState(engine.openSession(principal));
+            sessions.put(sessionToken, sessionState);
             RemoteProtocol.Message message;
             while ((message = RemoteProtocol.read(input, maxFrameBytes)) != null) {
                 switch (message) {
@@ -139,32 +137,35 @@ final class DatabaseProtocolServer implements AutoCloseable {
             logClientFailure(exception);
         } finally {
             sessions.remove(sessionToken);
-            sessionState.close();
+            if (sessionState != null) {
+                sessionState.close();
+            }
         }
     }
 
-    private boolean performHandshake(BufferedInputStream input, BufferedOutputStream output, String sessionToken) throws IOException {
+    private String performHandshake(BufferedInputStream input, BufferedOutputStream output, String sessionToken) throws IOException {
         RemoteProtocol.Message message = RemoteProtocol.read(input, maxFrameBytes);
         if (message == null) {
-            return false;
+            return null;
         }
         if (!(message instanceof RemoteProtocol.ClientHello hello)) {
             writeFailure(output, RemoteProtocol.Failure.protocolError("Expected CLIENT_HELLO as the first frame", true));
-            return false;
+            return null;
         }
         if (hello.protocolVersion() != RemoteProtocol.VERSION) {
             writeFailure(output, RemoteProtocol.Failure.protocolError(
                     "Unsupported protocol version: " + hello.protocolVersion(), true));
-            return false;
+            return null;
         }
-        if (!authentication.authenticate(hello.user(), hello.password())) {
+        String principal = authenticatedPrincipal(hello.user(), hello.password());
+        if (principal == null) {
             writeFailure(output, new RemoteProtocol.Failure(-1, "AUTHENTICATION_FAILED",
                     "Authentication failed", Common.SourceSpan.NONE, true));
-            return false;
+            return null;
         }
         RemoteProtocol.write(output, new RemoteProtocol.ServerHello(
                 SERVER_NAME, RemoteProtocol.VERSION, maxFrameBytes, sessionToken), maxFrameBytes);
-        return true;
+        return principal;
     }
 
     private void handleExecute(SessionState sessionState, BufferedOutputStream output,
@@ -256,6 +257,16 @@ final class DatabaseProtocolServer implements AutoCloseable {
                 case "ROLLBACK" -> transaction.rollback();
                 case "SAVEPOINT" -> transaction.savepoint(request.argument());
                 case "ROLLBACK_TO_SAVEPOINT" -> transaction.rollbackToSavepoint(request.argument());
+                case "XA_PREPARE" -> session.xaPrepare(parseXid(request.argument()));
+                case "XA_COMMIT" -> {
+                    String[] parts = request.argument().split("\\|", 2);
+                    if (parts.length != 2) {
+                        throw new Common.DatabaseException(Common.ErrorCode.SEMANTIC_ERROR,
+                                "Malformed XA commit request");
+                    }
+                    session.xaCommit(parseXid(parts[1]), "1".equals(parts[0]));
+                }
+                case "XA_ROLLBACK" -> session.xaRollback(parseXid(request.argument()));
                 case "ACTIVE" -> {
                 }
                 default -> throw new Common.DatabaseException(Common.ErrorCode.UNSUPPORTED_FEATURE,
@@ -295,26 +306,22 @@ final class DatabaseProtocolServer implements AutoCloseable {
         return reason == null || reason.isBlank() ? "bye" : reason.trim();
     }
 
-    private record Authentication(String user, String password) {
-        static Authentication disabled() {
-            return new Authentication("", "");
+    private static EngineApi.XidDescriptor parseXid(String encoded) {
+        String[] parts = (encoded == null ? "" : encoded).split("\\|", 3);
+        if (parts.length != 3) {
+            throw new Common.DatabaseException(Common.ErrorCode.SEMANTIC_ERROR, "Malformed XA branch identifier");
         }
+        return new EngineApi.XidDescriptor(
+                Integer.parseInt(parts[0]),
+                Base64.getUrlDecoder().decode(parts[1]),
+                Base64.getUrlDecoder().decode(parts[2]));
+    }
 
-        static Authentication required(String user, String password) {
-            String normalizedUser = user == null ? "" : user.strip();
-            if (normalizedUser.isEmpty()) {
-                return disabled();
-            }
-            return new Authentication(normalizedUser, password == null ? "" : password);
+    private String authenticatedPrincipal(String user, String password) {
+        if (engine instanceof dev.javadb.engine.EmbeddedDatabaseEngine embedded) {
+            return embedded.authenticatePrincipal(user, password);
         }
-
-        boolean authenticate(String candidateUser, String candidatePassword) {
-            if (user.isEmpty()) {
-                return true;
-            }
-            return user.equals(candidateUser == null ? "" : candidateUser)
-                    && password.equals(candidatePassword == null ? "" : candidatePassword);
-        }
+        return "system";
     }
 
     private record SessionState(EngineApi.Session session, Map<Long, Common.ExecutionControl> executions) {

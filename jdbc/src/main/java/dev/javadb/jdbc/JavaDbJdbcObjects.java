@@ -74,6 +74,31 @@ final class JavaDbJdbcObjects {
         return value;
     }
 
+    static String nativeParameterLiteral(Object value, Integer sqlType) throws SQLException {
+        if (value == null || sqlType == null) {
+            return null;
+        }
+        if (sqlType == Types.BLOB && value instanceof String text && text.startsWith(BLOB_PREFIX)) {
+            return functionLiteral("BLOB_FROM_BASE64", text.substring(BLOB_PREFIX.length()));
+        }
+        if (sqlType == Types.ARRAY && value instanceof String text && text.startsWith(ARRAY_PREFIX)) {
+            return functionLiteral("ARRAY_PARSE", text.substring(ARRAY_PREFIX.length()));
+        }
+        if (sqlType == Types.STRUCT && value instanceof String text && text.startsWith(STRUCT_PREFIX)) {
+            return functionLiteral("STRUCT_PARSE", text.substring(STRUCT_PREFIX.length()));
+        }
+        if (sqlType == Types.REF && value instanceof String text && text.startsWith(REF_PREFIX)) {
+            return functionLiteral("REF_PARSE", text.substring(REF_PREFIX.length()));
+        }
+        if (sqlType == Types.ROWID && value instanceof String text && text.startsWith(ROWID_PREFIX)) {
+            return functionLiteral("ROWID_FROM_BASE64", text.substring(ROWID_PREFIX.length()));
+        }
+        if (sqlType == Types.SQLXML && value instanceof String text) {
+            return functionLiteral("XMLPARSE", text);
+        }
+        return null;
+    }
+
     static Clob toClob(String text) {
         return text == null ? null : new JavaDbClob(text);
     }
@@ -90,6 +115,21 @@ final class JavaDbJdbcObjects {
         byte[] bytes = toBinary(text);
         blob.setBytes(1L, bytes);
         return blob;
+    }
+
+    static Blob toBlob(Common.Value value) throws SQLException {
+        if (value == null || value.isNull()) {
+            return null;
+        }
+        return switch (value.type()) {
+            case BLOB -> {
+                JavaDbBlob blob = new JavaDbBlob();
+                blob.setBytes(1L, value.asBytes());
+                yield blob;
+            }
+            case TEXT -> toBlob(value.asText());
+            default -> throw new SQLFeatureNotSupportedException("Blob accessors require BLOB or TEXT values");
+        };
     }
 
     static Array toArray(String text) throws SQLException {
@@ -112,6 +152,28 @@ final class JavaDbJdbcObjects {
         return new JavaDbArray(typeName, elements);
     }
 
+    static Array toArray(Common.Value value) throws SQLException {
+        if (value == null || value.isNull()) {
+            return null;
+        }
+        return switch (value.type()) {
+            case ARRAY -> {
+                Common.ArrayValue arrayValue = value.asArray();
+                Object[] elements = arrayValue.elements().stream().map(element -> {
+                    try {
+                        return toJdbcValue(element);
+                    } catch (SQLException exception) {
+                        throw new Common.DatabaseException(Common.ErrorCode.INTERNAL_ERROR,
+                                "Failed to materialize ARRAY element", exception);
+                    }
+                }).toArray();
+                yield new JavaDbArray(arrayValue.baseTypeName(), elements);
+            }
+            case TEXT -> toArray(value.asText());
+            default -> throw new SQLFeatureNotSupportedException("Array accessors require ARRAY or TEXT values");
+        };
+    }
+
     static Struct toStruct(String text) throws SQLException {
         if (text == null) {
             return null;
@@ -132,6 +194,28 @@ final class JavaDbJdbcObjects {
         return new JavaDbStruct(typeName, attributes);
     }
 
+    static Struct toStruct(Common.Value value) throws SQLException {
+        if (value == null || value.isNull()) {
+            return null;
+        }
+        return switch (value.type()) {
+            case STRUCT -> {
+                Common.StructValue structValue = value.asStruct();
+                Object[] attributes = structValue.attributes().stream().map(attribute -> {
+                    try {
+                        return toJdbcValue(attribute);
+                    } catch (SQLException exception) {
+                        throw new Common.DatabaseException(Common.ErrorCode.INTERNAL_ERROR,
+                                "Failed to materialize STRUCT attribute", exception);
+                    }
+                }).toArray();
+                yield new JavaDbStruct(structValue.sqlTypeName(), attributes);
+            }
+            case TEXT -> toStruct(value.asText());
+            default -> throw new SQLFeatureNotSupportedException("Struct accessors require STRUCT or TEXT values");
+        };
+    }
+
     static Ref toRef(String text) throws SQLException {
         if (text == null) {
             return null;
@@ -146,6 +230,17 @@ final class JavaDbJdbcObjects {
         return new JavaDbRef(decodeText(parts[0]), decodeScalar(parts[1]));
     }
 
+    static Ref toRef(Common.Value value) throws SQLException {
+        if (value == null || value.isNull()) {
+            return null;
+        }
+        return switch (value.type()) {
+            case REF -> new JavaDbRef(value.asRef().baseTypeName(), toJdbcValue(value.asRef().referencedValue()));
+            case TEXT -> toRef(value.asText());
+            default -> throw new SQLFeatureNotSupportedException("Ref accessors require REF or TEXT values");
+        };
+    }
+
     static RowId toRowId(String text) throws SQLException {
         if (text == null) {
             return null;
@@ -156,6 +251,17 @@ final class JavaDbJdbcObjects {
         return new JavaDbRowId(Base64.getDecoder().decode(text.substring(ROWID_PREFIX.length())));
     }
 
+    static RowId toRowId(Common.Value value) throws SQLException {
+        if (value == null || value.isNull()) {
+            return null;
+        }
+        return switch (value.type()) {
+            case ROWID -> new JavaDbRowId(value.asRowIdBytes());
+            case TEXT -> toRowId(value.asText());
+            default -> throw new SQLFeatureNotSupportedException("RowId accessors require ROWID or TEXT values");
+        };
+    }
+
     static SQLXML toSqlXml(String text) throws SQLException {
         if (text == null) {
             return null;
@@ -163,6 +269,17 @@ final class JavaDbJdbcObjects {
         JavaDbSqlXml sqlxml = new JavaDbSqlXml();
         sqlxml.setString(text);
         return sqlxml;
+    }
+
+    static SQLXML toSqlXml(Common.Value value) throws SQLException {
+        if (value == null || value.isNull()) {
+            return null;
+        }
+        return switch (value.type()) {
+            case SQLXML -> toSqlXml(value.asSqlXml());
+            case TEXT -> toSqlXml(value.asText());
+            default -> throw new SQLFeatureNotSupportedException("SQLXML accessors require SQLXML or TEXT values");
+        };
     }
 
     static Reader toCharacterStream(String text) {
@@ -183,26 +300,55 @@ final class JavaDbJdbcObjects {
     }
 
     static Blob resultSetBlob(ResultSet resultSet, Object column) throws SQLException {
+        Object nativeValue = nativeColumnObject(resultSet, column);
+        if (nativeValue instanceof Blob blob) {
+            return blob;
+        }
+        if (nativeValue instanceof byte[] bytes) {
+            JavaDbBlob blob = new JavaDbBlob();
+            blob.setBytes(1L, bytes);
+            return blob;
+        }
         return toBlob(textColumnValue(resultSet, column, "Blob accessors"));
     }
 
     static Array resultSetArray(ResultSet resultSet, Object column) throws SQLException {
+        Object nativeValue = nativeColumnObject(resultSet, column);
+        if (nativeValue instanceof Array array) {
+            return array;
+        }
         return toArray(textColumnValue(resultSet, column, "Array accessors"));
     }
 
     static Ref resultSetRef(ResultSet resultSet, Object column) throws SQLException {
+        Object nativeValue = nativeColumnObject(resultSet, column);
+        if (nativeValue instanceof Ref ref) {
+            return ref;
+        }
         return toRef(textColumnValue(resultSet, column, "Ref accessors"));
     }
 
     static Struct resultSetStruct(ResultSet resultSet, Object column) throws SQLException {
+        Object nativeValue = nativeColumnObject(resultSet, column);
+        if (nativeValue instanceof Struct struct) {
+            return struct;
+        }
         return toStruct(textColumnValue(resultSet, column, "Struct accessors"));
     }
 
     static RowId resultSetRowId(ResultSet resultSet, Object column) throws SQLException {
+        Object nativeValue = nativeColumnObject(resultSet, column);
+        if (nativeValue instanceof RowId rowId) {
+            return rowId;
+        }
         return toRowId(textColumnValue(resultSet, column, "RowId accessors"));
     }
 
     static SQLXML resultSetSqlXml(ResultSet resultSet, Object column) throws SQLException {
+        Object nativeValue = nativeColumnObject(resultSet, column);
+        if (nativeValue instanceof SQLXML sqlxml) {
+            return sqlxml;
+        }
         return toSqlXml(textColumnValue(resultSet, column, "SQLXML accessors"));
     }
 
@@ -211,6 +357,13 @@ final class JavaDbJdbcObjects {
     }
 
     static byte[] resultSetBytes(ResultSet resultSet, Object column) throws SQLException {
+        Object nativeValue = nativeColumnObject(resultSet, column);
+        if (nativeValue instanceof byte[] bytes) {
+            return bytes.clone();
+        }
+        if (nativeValue instanceof Blob blob) {
+            return blob.getBytes(1L, (int) blob.length());
+        }
         return toBinary(textColumnValue(resultSet, column, "Binary accessors"));
     }
 
@@ -226,10 +379,32 @@ final class JavaDbJdbcObjects {
         if (value == null || value.isNull()) {
             return null;
         }
-        if (value.type() != Common.DataType.TEXT) {
+        if (value.type() != Common.DataType.TEXT && value.type() != Common.DataType.SQLXML) {
             throw new SQLFeatureNotSupportedException(feature + " are only supported for TEXT values");
         }
         return value.asText();
+    }
+
+    static Object toJdbcValue(Common.Value value) throws SQLException {
+        if (value == null || value.isNull()) {
+            return null;
+        }
+        return switch (value.type()) {
+            case INTEGER -> value.asInt();
+            case BIGINT -> value.asLong();
+            case BOOLEAN -> value.asBoolean();
+            case TEXT -> value.asText();
+            case BLOB -> toBlob(value);
+            case ARRAY -> toArray(value);
+            case STRUCT -> toStruct(value);
+            case REF -> toRef(value);
+            case ROWID -> toRowId(value);
+            case SQLXML -> toSqlXml(value);
+            case DECIMAL -> value.asDecimal();
+            case DATE -> Date.valueOf(value.asDate());
+            case TIME -> Time.valueOf(value.asTime());
+            case TIMESTAMP -> Timestamp.valueOf(value.asTimestamp());
+        };
     }
 
     static boolean isSpecialObjectType(Class<?> type) {
@@ -428,6 +603,15 @@ final class JavaDbJdbcObjects {
         return column instanceof Integer integer ? resultSet.getString(integer) : resultSet.getString((String) column);
     }
 
+    private static Object nativeColumnObject(ResultSet resultSet, Object column) throws SQLException {
+        int index = columnIndex(resultSet, column);
+        int jdbcType = resultSet.getMetaData().getColumnType(index);
+        if (isTextJdbcType(jdbcType)) {
+            return null;
+        }
+        return column instanceof Integer integer ? resultSet.getObject(integer) : resultSet.getObject((String) column);
+    }
+
     private static int columnIndex(ResultSet resultSet, Object column) throws SQLException {
         if (column instanceof Integer integer) {
             return integer;
@@ -444,8 +628,11 @@ final class JavaDbJdbcObjects {
                 || jdbcType == Types.NVARCHAR
                 || jdbcType == Types.LONGNVARCHAR
                 || jdbcType == Types.CLOB
-                || jdbcType == Types.NCLOB
-                || jdbcType == Types.SQLXML;
+                || jdbcType == Types.NCLOB;
+    }
+
+    private static String functionLiteral(String function, String argument) {
+        return function + "('" + argument.replace("'", "''") + "')";
     }
 
     private static String readReader(Reader reader) throws SQLException, java.io.IOException {

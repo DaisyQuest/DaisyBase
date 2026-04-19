@@ -41,6 +41,14 @@ interface JavaDbTransport extends AutoCloseable {
 
     boolean active() throws SQLException;
 
+    void xaPrepare(EngineApi.XidDescriptor xid) throws SQLException;
+
+    void xaCommit(EngineApi.XidDescriptor xid, boolean onePhase) throws SQLException;
+
+    void xaRollback(EngineApi.XidDescriptor xid) throws SQLException;
+
+    List<EngineApi.XidDescriptor> xaRecover() throws SQLException;
+
     Common.TupleBatch metadata(EngineIntrospection.MetadataQuery query, List<String> arguments) throws SQLException;
 
     void ping() throws SQLException;

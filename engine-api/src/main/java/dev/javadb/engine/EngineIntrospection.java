@@ -25,7 +25,8 @@ public final class EngineIntrospection {
         PROCEDURES,
         PROCEDURE_COLUMNS,
         FUNCTIONS,
-        FUNCTION_COLUMNS
+        FUNCTION_COLUMNS,
+        XA_RECOVER
     }
 
     public static Common.TupleBatch query(EngineApi.DatabaseEngine engine, MetadataQuery query, List<String> arguments) {
@@ -43,6 +44,7 @@ public final class EngineIntrospection {
             case PROCEDURE_COLUMNS -> procedureColumns(snapshot, arg(arguments, 0), arg(arguments, 1), arg(arguments, 2));
             case FUNCTIONS -> functions(snapshot, arg(arguments, 0), arg(arguments, 1));
             case FUNCTION_COLUMNS -> functionColumns(snapshot, arg(arguments, 0), arg(arguments, 1), arg(arguments, 2));
+            case XA_RECOVER -> xaRecover(engine);
         };
     }
 
@@ -52,6 +54,25 @@ public final class EngineIntrospection {
         }
         throw new Common.DatabaseException(Common.ErrorCode.UNSUPPORTED_FEATURE,
                 "Metadata introspection is unsupported for engine type " + engine.getClass().getSimpleName());
+    }
+
+    private static Common.TupleBatch xaRecover(EngineApi.DatabaseEngine engine) {
+        if (!(engine instanceof EmbeddedDatabaseEngine embeddedDatabaseEngine)) {
+            throw new Common.DatabaseException(Common.ErrorCode.UNSUPPORTED_FEATURE,
+                    "XA recovery introspection is unsupported for engine type " + engine.getClass().getSimpleName());
+        }
+        List<Common.ResultRow> rows = embeddedDatabaseEngine.recoverPreparedXa().stream()
+                .map(xid -> new Common.ResultRow(List.of(
+                        Common.Value.integer(xid.formatId()),
+                        Common.Value.blob(xid.globalId()),
+                        Common.Value.blob(xid.branchId())
+                )))
+                .toList();
+        return new Common.TupleBatch(List.of(
+                new Common.ResultColumn("FORMAT_ID", Common.DataType.INTEGER),
+                new Common.ResultColumn("GLOBAL_ID", Common.DataType.BLOB),
+                new Common.ResultColumn("BRANCH_ID", Common.DataType.BLOB)
+        ), rows);
     }
 
     private static Common.TupleBatch schemas(Catalog.CatalogSnapshot snapshot, String schemaPattern) {
@@ -479,6 +500,12 @@ public final class EngineIntrospection {
             case BIGINT -> Types.BIGINT;
             case BOOLEAN -> Types.BOOLEAN;
             case TEXT -> Types.VARCHAR;
+            case BLOB -> Types.BLOB;
+            case ARRAY -> Types.ARRAY;
+            case STRUCT -> Types.STRUCT;
+            case REF -> Types.REF;
+            case ROWID -> Types.ROWID;
+            case SQLXML -> Types.SQLXML;
             case DECIMAL -> Types.DECIMAL;
             case DATE -> Types.DATE;
             case TIME -> Types.TIME;
@@ -492,6 +519,12 @@ public final class EngineIntrospection {
             case BIGINT -> "BIGINT";
             case BOOLEAN -> "BOOLEAN";
             case TEXT -> "TEXT";
+            case BLOB -> "BLOB";
+            case ARRAY -> "ARRAY";
+            case STRUCT -> "STRUCT";
+            case REF -> "REF";
+            case ROWID -> "ROWID";
+            case SQLXML -> "SQLXML";
             case DECIMAL -> "DECIMAL";
             case DATE -> "DATE";
             case TIME -> "TIME";
@@ -505,6 +538,10 @@ public final class EngineIntrospection {
             case BIGINT -> 19;
             case BOOLEAN -> 1;
             case TEXT -> 32_767;
+            case BLOB -> 1_048_576;
+            case ARRAY, STRUCT, REF -> 32_767;
+            case ROWID -> 256;
+            case SQLXML -> 1_048_576;
             case DECIMAL -> precision == null ? type.defaultPrecision() : precision;
             case DATE -> 10;
             case TIME -> 12;
@@ -515,7 +552,7 @@ public final class EngineIntrospection {
     private static int scale(Common.DataType type, Integer declaredScale) {
         return switch (type) {
             case DECIMAL -> declaredScale == null ? type.defaultScale() : declaredScale;
-            case INTEGER, BIGINT, BOOLEAN, TEXT, DATE, TIME, TIMESTAMP -> 0;
+            case INTEGER, BIGINT, BOOLEAN, TEXT, BLOB, ARRAY, STRUCT, REF, ROWID, SQLXML, DATE, TIME, TIMESTAMP -> 0;
         };
     }
 

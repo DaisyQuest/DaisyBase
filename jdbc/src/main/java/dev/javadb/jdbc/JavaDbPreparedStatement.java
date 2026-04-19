@@ -202,7 +202,7 @@ class JavaDbPreparedStatement extends JavaDbStatement implements PreparedStateme
 
     @Override
     public void setBytes(int parameterIndex, byte[] x) throws SQLException {
-        bind(parameterIndex, x, Types.VARCHAR);
+        bind(parameterIndex, x, Types.BLOB);
     }
 
     @Override
@@ -232,7 +232,7 @@ class JavaDbPreparedStatement extends JavaDbStatement implements PreparedStateme
 
     @Override
     public void setBinaryStream(int parameterIndex, InputStream x, int length) throws SQLException {
-        bind(parameterIndex, JavaDbJdbcObjects.readBinary(x), Types.VARCHAR);
+        bind(parameterIndex, JavaDbJdbcObjects.readBinary(x), Types.BLOB);
     }
 
     @Override
@@ -242,12 +242,12 @@ class JavaDbPreparedStatement extends JavaDbStatement implements PreparedStateme
 
     @Override
     public void setRef(int parameterIndex, Ref x) throws SQLException {
-        bind(parameterIndex, x, Types.VARCHAR);
+        bind(parameterIndex, x, Types.REF);
     }
 
     @Override
     public void setBlob(int parameterIndex, Blob x) throws SQLException {
-        bind(parameterIndex, x, Types.VARCHAR);
+        bind(parameterIndex, x, Types.BLOB);
     }
 
     @Override
@@ -257,7 +257,7 @@ class JavaDbPreparedStatement extends JavaDbStatement implements PreparedStateme
 
     @Override
     public void setArray(int parameterIndex, Array x) throws SQLException {
-        bind(parameterIndex, x, Types.VARCHAR);
+        bind(parameterIndex, x, Types.ARRAY);
     }
 
     @Override
@@ -287,7 +287,7 @@ class JavaDbPreparedStatement extends JavaDbStatement implements PreparedStateme
 
     @Override
     public void setRowId(int parameterIndex, RowId x) throws SQLException {
-        bind(parameterIndex, x, Types.VARCHAR);
+        bind(parameterIndex, x, Types.ROWID);
     }
 
     @Override
@@ -312,7 +312,7 @@ class JavaDbPreparedStatement extends JavaDbStatement implements PreparedStateme
 
     @Override
     public void setBlob(int parameterIndex, InputStream inputStream, long length) throws SQLException {
-        bind(parameterIndex, JavaDbJdbcObjects.readBinary(inputStream), Types.VARCHAR);
+        bind(parameterIndex, JavaDbJdbcObjects.readBinary(inputStream), Types.BLOB);
     }
 
     @Override
@@ -332,7 +332,7 @@ class JavaDbPreparedStatement extends JavaDbStatement implements PreparedStateme
 
     @Override
     public void setBinaryStream(int parameterIndex, InputStream x, long length) throws SQLException {
-        bind(parameterIndex, JavaDbJdbcObjects.readBinary(x), Types.VARCHAR);
+        bind(parameterIndex, JavaDbJdbcObjects.readBinary(x), Types.BLOB);
     }
 
     @Override
@@ -347,7 +347,7 @@ class JavaDbPreparedStatement extends JavaDbStatement implements PreparedStateme
 
     @Override
     public void setBinaryStream(int parameterIndex, InputStream x) throws SQLException {
-        bind(parameterIndex, JavaDbJdbcObjects.readBinary(x), Types.VARCHAR);
+        bind(parameterIndex, JavaDbJdbcObjects.readBinary(x), Types.BLOB);
     }
 
     @Override
@@ -367,7 +367,7 @@ class JavaDbPreparedStatement extends JavaDbStatement implements PreparedStateme
 
     @Override
     public void setBlob(int parameterIndex, InputStream inputStream) throws SQLException {
-        bind(parameterIndex, JavaDbJdbcObjects.readBinary(inputStream), Types.VARCHAR);
+        bind(parameterIndex, JavaDbJdbcObjects.readBinary(inputStream), Types.BLOB);
     }
 
     @Override
@@ -380,8 +380,9 @@ class JavaDbPreparedStatement extends JavaDbStatement implements PreparedStateme
         if (internalIndex < 1 || internalIndex > parameters.size()) {
             throw new SQLException("Parameter index out of range: " + parameterIndex);
         }
+        Integer effectiveSqlType = inferredSqlType(internalIndex, sqlType);
         parameters.set(internalIndex - 1, JavaDbPreparedSql.BoundParameter.of(
-                JavaDbJdbcObjects.normalizeParameterValue(value), sqlType));
+                JavaDbJdbcObjects.normalizeParameterValue(value), effectiveSqlType));
     }
 
     protected String renderedSql() throws SQLException {
@@ -468,5 +469,28 @@ class JavaDbPreparedStatement extends JavaDbStatement implements PreparedStateme
         } catch (IOException exception) {
             throw new SQLException("Failed reading parameter stream", exception);
         }
+    }
+
+    private Integer inferredSqlType(int parameterIndex, Integer fallbackSqlType) {
+        if (parameterIndex < 1 || parameterIndex > preparedHandle.parameterDescriptions().size()) {
+            return fallbackSqlType;
+        }
+        EngineApi.ParameterDescription description = preparedHandle.parameterDescriptions().get(parameterIndex - 1);
+        return switch (description.type()) {
+            case INTEGER -> Types.INTEGER;
+            case BIGINT -> Types.BIGINT;
+            case BOOLEAN -> Types.BOOLEAN;
+            case TEXT -> Types.VARCHAR;
+            case BLOB -> Types.BLOB;
+            case ARRAY -> Types.ARRAY;
+            case STRUCT -> Types.STRUCT;
+            case REF -> Types.REF;
+            case ROWID -> Types.ROWID;
+            case SQLXML -> Types.SQLXML;
+            case DECIMAL -> Types.DECIMAL;
+            case DATE -> Types.DATE;
+            case TIME -> Types.TIME;
+            case TIMESTAMP -> Types.TIMESTAMP;
+        };
     }
 }

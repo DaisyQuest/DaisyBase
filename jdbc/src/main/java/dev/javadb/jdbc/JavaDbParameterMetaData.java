@@ -97,6 +97,12 @@ final class JavaDbParameterMetaData {
             case BIGINT -> Types.BIGINT;
             case BOOLEAN -> Types.BOOLEAN;
             case TEXT -> Types.VARCHAR;
+            case BLOB -> Types.BLOB;
+            case ARRAY -> Types.ARRAY;
+            case STRUCT -> Types.STRUCT;
+            case REF -> Types.REF;
+            case ROWID -> Types.ROWID;
+            case SQLXML -> Types.SQLXML;
             case DECIMAL -> Types.DECIMAL;
             case DATE -> Types.DATE;
             case TIME -> Types.TIME;
@@ -110,6 +116,12 @@ final class JavaDbParameterMetaData {
             case BIGINT -> "BIGINT";
             case BOOLEAN -> "BOOLEAN";
             case TEXT -> "TEXT";
+            case BLOB -> "BLOB";
+            case ARRAY -> "ARRAY";
+            case STRUCT -> "STRUCT";
+            case REF -> "REF";
+            case ROWID -> "ROWID";
+            case SQLXML -> "SQLXML";
             case DECIMAL -> "DECIMAL";
             case DATE -> "DATE";
             case TIME -> "TIME";
@@ -123,6 +135,12 @@ final class JavaDbParameterMetaData {
             case BIGINT -> Long.class.getName();
             case BOOLEAN -> Boolean.class.getName();
             case TEXT -> String.class.getName();
+            case BLOB -> java.sql.Blob.class.getName();
+            case ARRAY -> java.sql.Array.class.getName();
+            case STRUCT -> java.sql.Struct.class.getName();
+            case REF -> java.sql.Ref.class.getName();
+            case ROWID -> java.sql.RowId.class.getName();
+            case SQLXML -> java.sql.SQLXML.class.getName();
             case DECIMAL -> java.math.BigDecimal.class.getName();
             case DATE -> java.sql.Date.class.getName();
             case TIME -> java.sql.Time.class.getName();

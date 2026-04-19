@@ -29,6 +29,7 @@ public final class EmbeddedDatabaseEngine implements EngineApi.DatabaseEngine {
     private final Wal.WalManager walManager;
     private final HeapStorageManager storageManager;
     private final SequenceStateStore sequenceStateStore;
+    private final PreparedXaStore preparedXaStore;
     private final Transactions.TransactionManager transactionManager;
     private final Execution.Executor executor = new Execution.Executor();
     private final AtomicLong nextObjectId;
@@ -42,7 +43,7 @@ public final class EmbeddedDatabaseEngine implements EngineApi.DatabaseEngine {
     private EmbeddedDatabaseEngine(EngineApi.DatabaseConfig config, Catalog.CatalogSnapshot catalogSnapshot,
                                    Storage.StorageSnapshot storageSnapshot, long lastCommitSequence,
                                    long nextObjectIdValue, Wal.WalManager walManager, HeapStorageManager storageManager,
-                                   SequenceStateStore sequenceStateStore) {
+                                   SequenceStateStore sequenceStateStore, PreparedXaStore preparedXaStore) {
         this.config = Objects.requireNonNull(config, "config");
         this.home = config.home();
         this.catalogPath = home.resolve("catalog").resolve("catalog.snapshot");
@@ -50,6 +51,7 @@ public final class EmbeddedDatabaseEngine implements EngineApi.DatabaseEngine {
         this.walManager = walManager;
         this.storageManager = storageManager;
         this.sequenceStateStore = sequenceStateStore;
+        this.preparedXaStore = preparedXaStore;
         this.transactionManager = new Transactions.TransactionManager(lastCommitSequence);
         this.nextObjectId = new AtomicLong(nextObjectIdValue);
         this.committedCatalog = catalogSnapshot;
@@ -67,6 +69,7 @@ public final class EmbeddedDatabaseEngine implements EngineApi.DatabaseEngine {
             Wal.WalManager walManager = new Wal.WalManager(config.home().resolve("wal"));
             HeapStorageManager storageManager = new HeapStorageManager(config.home().resolve("data"));
             SequenceStateStore sequenceStateStore = new SequenceStateStore(config.home());
+            PreparedXaStore preparedXaStore = new PreparedXaStore(config.home());
             Path catalogPath = config.home().resolve("catalog").resolve("catalog.snapshot");
             Catalog.CatalogSnapshot catalogSnapshot = Catalog.readSnapshot(catalogPath);
             if (catalogSnapshot == null) {
@@ -100,7 +103,7 @@ public final class EmbeddedDatabaseEngine implements EngineApi.DatabaseEngine {
             long nextObjectId = Math.max(walManager.meta().nextObjectId(), Catalog.maxObjectId(catalogSnapshot) + 1);
             sequenceStateStore.ensureDefinitions(catalogSnapshot);
             EmbeddedDatabaseEngine engine = new EmbeddedDatabaseEngine(config, catalogSnapshot, storageSnapshot, lastCommitSequence,
-                    nextObjectId, walManager, storageManager, sequenceStateStore);
+                    nextObjectId, walManager, storageManager, sequenceStateStore, preparedXaStore);
             engine.checkpoint();
             walManager.updateNextObjectId(engine.nextObjectId.get());
             return engine;
@@ -114,8 +117,13 @@ public final class EmbeddedDatabaseEngine implements EngineApi.DatabaseEngine {
 
     @Override
     public EngineApi.Session openSession() {
+        return openSession("system");
+    }
+
+    @Override
+    public EngineApi.Session openSession(String principal) {
         ensureOpen();
-        return new SessionImpl();
+        return new SessionImpl(principal);
     }
 
     @Override
@@ -143,9 +151,59 @@ public final class EmbeddedDatabaseEngine implements EngineApi.DatabaseEngine {
         return committedCatalog;
     }
 
+    List<EngineApi.XidDescriptor> recoverPreparedXa() {
+        return preparedXaStore.recover();
+    }
+
+    public String authenticatePrincipal(String user, String password) {
+        Catalog.CatalogSnapshot snapshot = committedCatalog;
+        if (!snapshot.hasAnyUsers()) {
+            return "system";
+        }
+        String candidate = user == null ? "" : user.strip().toLowerCase();
+        return snapshot.authenticate(candidate, password == null ? "" : password) ? candidate : null;
+    }
+
     private void ensureOpen() {
         if (closed) {
             throw new Common.DatabaseException(Common.ErrorCode.INTERNAL_ERROR, "Engine is closed");
+        }
+    }
+
+    private void prepareXaBranch(EngineApi.XidDescriptor xid, Transactions.TransactionState transactionState) {
+        synchronized (commitMonitor) {
+            ensureOpen();
+            if (preparedXaStore.load(xid) != null) {
+                throw new Common.DatabaseException(Common.ErrorCode.TRANSACTION_CONFLICT,
+                        "Prepared XA branch already exists");
+            }
+            preparedXaStore.save(new PreparedXaStore.PreparedBranch(xid, transactionState.freezeForPrepare()));
+        }
+    }
+
+    private void commitPreparedXa(EngineApi.XidDescriptor xid) {
+        synchronized (commitMonitor) {
+            ensureOpen();
+            PreparedXaStore.PreparedBranch branch = preparedXaStore.load(xid);
+            if (branch == null) {
+                throw new Common.DatabaseException(Common.ErrorCode.TRANSACTION_CONFLICT,
+                        "Unknown prepared XA branch");
+            }
+            Transactions.TransactionState restored = transactionManager.restorePrepared(
+                    branch.preparedState(), committedCatalog);
+            commitTransaction(restored);
+            preparedXaStore.delete(xid);
+        }
+    }
+
+    private void rollbackPreparedXa(EngineApi.XidDescriptor xid) {
+        synchronized (commitMonitor) {
+            ensureOpen();
+            if (preparedXaStore.load(xid) == null) {
+                throw new Common.DatabaseException(Common.ErrorCode.TRANSACTION_CONFLICT,
+                        "Unknown prepared XA branch");
+            }
+            preparedXaStore.delete(xid);
         }
     }
 
@@ -210,10 +268,15 @@ public final class EmbeddedDatabaseEngine implements EngineApi.DatabaseEngine {
     }
 
     private final class SessionImpl implements EngineApi.Session {
+        private final String principal;
         private Transactions.TransactionState activeTransaction;
         private int statementCounter;
         private final Map<Long, PreparedStatementState> preparedStatements = new LinkedHashMap<>();
         private final AtomicLong nextPreparedStatementId = new AtomicLong(1);
+
+        private SessionImpl(String principal) {
+            this.principal = principal == null || principal.isBlank() ? "system" : principal.toLowerCase();
+        }
 
         @Override
         public EngineApi.BatchResult execute(String sql) {
@@ -247,6 +310,7 @@ public final class EmbeddedDatabaseEngine implements EngineApi.DatabaseEngine {
             }
             SqlFrontend.Statement statement = batch.statements().getFirst();
             Catalog.CatalogSnapshot visibleCatalog = activeTransaction == null ? committedCatalog : activeTransaction.catalogSnapshot();
+            authorizeStatement(statement, visibleCatalog);
             Planner.Binder binder = new Planner.Binder(visibleCatalog, () -> -1L);
             List<EngineApi.ParameterDescription> parameterDescriptions = describeParameters(statement, visibleCatalog, binder);
             long statementId = nextPreparedStatementId.getAndIncrement();
@@ -278,6 +342,49 @@ public final class EmbeddedDatabaseEngine implements EngineApi.DatabaseEngine {
         @Override
         public void closePrepared(long statementId) {
             preparedStatements.remove(statementId);
+        }
+
+        @Override
+        public void xaPrepare(EngineApi.XidDescriptor xid) {
+            ensureOpen();
+            if (activeTransaction == null) {
+                throw new Common.DatabaseException(Common.ErrorCode.TRANSACTION_CONFLICT,
+                        "No active transaction to prepare");
+            }
+            prepareXaBranch(xid, activeTransaction);
+            activeTransaction = null;
+        }
+
+        @Override
+        public void xaCommit(EngineApi.XidDescriptor xid, boolean onePhase) {
+            ensureOpen();
+            if (onePhase) {
+                if (activeTransaction == null) {
+                    throw new Common.DatabaseException(Common.ErrorCode.TRANSACTION_CONFLICT,
+                            "No active transaction to commit");
+                }
+                commitTransaction(activeTransaction);
+                activeTransaction = null;
+                return;
+            }
+            commitPreparedXa(xid);
+        }
+
+        @Override
+        public void xaRollback(EngineApi.XidDescriptor xid) {
+            ensureOpen();
+            if (activeTransaction != null) {
+                activeTransaction.rollbackAll();
+                activeTransaction = null;
+                return;
+            }
+            rollbackPreparedXa(xid);
+        }
+
+        @Override
+        public List<EngineApi.XidDescriptor> xaRecover() {
+            ensureOpen();
+            return recoverPreparedXa();
         }
 
         private EngineApi.StatementResult executeStatement(SqlFrontend.Statement statement,
@@ -335,6 +442,7 @@ public final class EmbeddedDatabaseEngine implements EngineApi.DatabaseEngine {
                         "Transaction control statements are not allowed inside routines", statement.span());
             }
             Catalog.CatalogSnapshot visibleCatalog = transactionState.catalogSnapshot();
+            authorizeStatement(statement, visibleCatalog);
             if (statement instanceof SqlFrontend.CallStatement call) {
                 return executeRoutineCall(call, transactionState, visibleCatalog, executionControl);
             }
@@ -468,6 +576,74 @@ public final class EmbeddedDatabaseEngine implements EngineApi.DatabaseEngine {
                 activeTransaction = null;
             }
             preparedStatements.clear();
+        }
+
+        private void authorizeStatement(SqlFrontend.Statement statement, Catalog.CatalogSnapshot visibleCatalog) {
+            if ("system".equalsIgnoreCase(principal)) {
+                return;
+            }
+            SqlFrontend.Statement target = statement instanceof SqlFrontend.ExplainStatement explainStatement
+                    ? explainStatement.statement()
+                    : statement;
+            switch (target) {
+                case SqlFrontend.SelectStatement select -> requireTablePrivilege(visibleCatalog,
+                        Catalog.QualifiedName.from(select.from()), Catalog.Privilege.SELECT, target.span());
+                case SqlFrontend.InsertStatement insert -> requireTablePrivilege(visibleCatalog,
+                        Catalog.QualifiedName.from(insert.tableName()), Catalog.Privilege.INSERT, target.span());
+                case SqlFrontend.UpdateStatement update -> requireTablePrivilege(visibleCatalog,
+                        Catalog.QualifiedName.from(update.tableName()), Catalog.Privilege.UPDATE, target.span());
+                case SqlFrontend.DeleteStatement delete -> requireTablePrivilege(visibleCatalog,
+                        Catalog.QualifiedName.from(delete.tableName()), Catalog.Privilege.DELETE, target.span());
+                case SqlFrontend.CallStatement call -> requireRoutinePrivilege(visibleCatalog,
+                        Catalog.QualifiedName.from(call.routineName()), Catalog.Privilege.EXECUTE, target.span());
+                case SqlFrontend.CreateSchemaStatement createSchema ->
+                        requireAdmin(visibleCatalog, createSchema.span());
+                case SqlFrontend.CreateTableStatement createTable ->
+                        requireAdmin(visibleCatalog, createTable.span());
+                case SqlFrontend.CreateIndexStatement createIndex ->
+                        requireAdmin(visibleCatalog, createIndex.span());
+                case SqlFrontend.CreateSequenceStatement createSequence ->
+                        requireAdmin(visibleCatalog, createSequence.span());
+                case SqlFrontend.CreateRoutineStatement createRoutine ->
+                        requireAdmin(visibleCatalog, createRoutine.span());
+                case SqlFrontend.CreateUserStatement createUser ->
+                        requireAdmin(visibleCatalog, createUser.span());
+                case SqlFrontend.CreateRoleStatement createRole ->
+                        requireAdmin(visibleCatalog, createRole.span());
+                case SqlFrontend.GrantRoleStatement grantRole ->
+                        requireAdmin(visibleCatalog, grantRole.span());
+                case SqlFrontend.GrantPrivilegeStatement grantPrivilege ->
+                        requireAdmin(visibleCatalog, grantPrivilege.span());
+                default -> {
+                }
+            }
+        }
+
+        private void requireAdmin(Catalog.CatalogSnapshot visibleCatalog, Common.SourceSpan span) {
+            if (!visibleCatalog.hasPrivilege(principal, Catalog.Privilege.ADMIN, null)) {
+                throw new Common.DatabaseException(Common.ErrorCode.TRANSACTION_CONFLICT,
+                        "Principal " + principal + " is not allowed to administer the catalog", span);
+            }
+        }
+
+        private void requireTablePrivilege(Catalog.CatalogSnapshot visibleCatalog, Catalog.QualifiedName tableName,
+                                           Catalog.Privilege privilege, Common.SourceSpan span) {
+            Catalog.TableDefinition table = visibleCatalog.requireTable(tableName);
+            if (!visibleCatalog.hasPrivilege(principal, privilege, table.id())) {
+                throw new Common.DatabaseException(Common.ErrorCode.TRANSACTION_CONFLICT,
+                        "Principal " + principal + " lacks " + privilege + " on table " + tableName.toSql(), span);
+            }
+        }
+
+        private void requireRoutinePrivilege(Catalog.CatalogSnapshot visibleCatalog, Catalog.QualifiedName routineName,
+                                             Catalog.Privilege privilege, Common.SourceSpan span) {
+            Catalog.RoutineDefinition routine = visibleCatalog.routine(routineName)
+                    .orElseThrow(() -> new Common.DatabaseException(Common.ErrorCode.SEMANTIC_ERROR,
+                            "Unknown routine " + routineName.toSql(), span));
+            if (!visibleCatalog.hasPrivilege(principal, privilege, routine.id())) {
+                throw new Common.DatabaseException(Common.ErrorCode.TRANSACTION_CONFLICT,
+                        "Principal " + principal + " lacks " + privilege + " on routine " + routineName.toSql(), span);
+            }
         }
 
         private List<Common.ResultColumn> describeStatement(SqlFrontend.Statement statement) {

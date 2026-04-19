@@ -55,9 +55,10 @@ Recognized properties:
 Current authentication semantics:
 
 - `user` and `password` are accepted for JDBC compatibility.
-- Embedded mode ignores them.
+- Embedded mode uses `user` as the session principal when supplied.
 - Remote mode sends them during the binary-protocol handshake.
-- The server may require one configured static user/password pair.
+- Remote authentication is validated against catalog-backed users with hashed passwords.
+- Remote sessions are authorized through catalog-backed roles and explicit grants.
 - `setClientInfo(...)` values are stored driver-side for framework compatibility.
 
 ## 4. Driver Contract
@@ -78,7 +79,8 @@ Current authentication semantics:
 
 - `dev.javadb.jdbc.JavaDbXADataSource` implements `javax.sql.XADataSource`.
 - It exposes one `XAResource` per underlying JavaDB connection.
-- The XA surface is intentionally bounded to single-branch coordination over one live JavaDB session.
+- The XA surface supports durable prepare/recover/commit/rollback.
+- It remains bounded to one active branch per physical JavaDB connection/session.
 
 ## 5. Connection Semantics
 
@@ -164,10 +166,11 @@ Rules:
   - `setClob`
   - `setNClob`
   - `setSQLXML`
-  - `setArray`
-  - `setRef`
-  - `setRowId`
-- Binary, array, struct, ref, row-id, and XML bindings are currently encoded through `TEXT` literals rather than native engine types.
+- `setArray`
+- `setRef`
+- `setRowId`
+- Binary, array, struct, ref, row-id, and XML bindings use native engine literals when the inferred target type is native.
+- Deterministic `TEXT` wrapper encodings remain supported for compatibility columns and legacy payloads.
 
 Prepared-statement scope:
 
@@ -191,6 +194,13 @@ Prepared-statement scope:
   - `Struct`
   - `Ref`
   - `RowId`
+- Native engine result sets also expose:
+  - `BLOB`
+  - `ARRAY`
+  - `STRUCT`
+  - `REF`
+  - `ROWID`
+  - `SQLXML`
 
 Type mappings:
 
@@ -241,7 +251,8 @@ Metadata visibility:
   - prepare/describe requests
   - prepared execution and prepared statement close
   - cooperative cancellation requests
-  - optional credential exchange during handshake
+  - catalog-backed credential exchange during handshake
+  - XA prepare/commit/rollback requests plus recovery scans
 
 ## 10. Exception Mapping
 
@@ -259,11 +270,9 @@ Map engine errors deterministically:
 Fail explicitly with `SQLFeatureNotSupportedException`:
 
 - live cursor semantics beyond disconnected cached row sets
-- engine-native large objects (`Blob`, `Clob`, `NClob`, `SQLXML`)
-- engine-native arrays, structs, refs, and row ids
 - custom SQL type maps and `Array.getResultSet(...)`
 - multiple open concurrent live cursors on one statement object
-- crash-recoverable distributed XA recovery
+- interleaved multi-branch XA work on one physical connection
 
 ## 12. Testing Requirements
 

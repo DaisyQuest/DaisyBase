@@ -127,6 +127,12 @@ final class JavaDbResultSets {
             case BIGINT -> rowSet.updateLong(columnIndex, value.asLong());
             case BOOLEAN -> rowSet.updateBoolean(columnIndex, value.asBoolean());
             case TEXT -> rowSet.updateString(columnIndex, value.asText());
+            case BLOB -> rowSet.updateObject(columnIndex, JavaDbJdbcObjects.toBlob(value));
+            case ARRAY -> rowSet.updateObject(columnIndex, JavaDbJdbcObjects.toArray(value));
+            case STRUCT -> rowSet.updateObject(columnIndex, JavaDbJdbcObjects.toStruct(value));
+            case REF -> rowSet.updateObject(columnIndex, JavaDbJdbcObjects.toRef(value));
+            case ROWID -> rowSet.updateObject(columnIndex, JavaDbJdbcObjects.toRowId(value));
+            case SQLXML -> rowSet.updateObject(columnIndex, JavaDbJdbcObjects.toSqlXml(value));
             case DECIMAL -> rowSet.updateBigDecimal(columnIndex, value.asDecimal());
             case DATE -> rowSet.updateDate(columnIndex, java.sql.Date.valueOf(value.asDate()));
             case TIME -> rowSet.updateTime(columnIndex, java.sql.Time.valueOf(value.asTime()));
@@ -140,6 +146,12 @@ final class JavaDbResultSets {
             case BIGINT -> Types.BIGINT;
             case BOOLEAN -> Types.BOOLEAN;
             case TEXT -> Types.VARCHAR;
+            case BLOB -> Types.BLOB;
+            case ARRAY -> Types.ARRAY;
+            case STRUCT -> Types.STRUCT;
+            case REF -> Types.REF;
+            case ROWID -> Types.ROWID;
+            case SQLXML -> Types.SQLXML;
             case DECIMAL -> Types.DECIMAL;
             case DATE -> Types.DATE;
             case TIME -> Types.TIME;
@@ -153,6 +165,12 @@ final class JavaDbResultSets {
             case BIGINT -> "BIGINT";
             case BOOLEAN -> "BOOLEAN";
             case TEXT -> "TEXT";
+            case BLOB -> "BLOB";
+            case ARRAY -> "ARRAY";
+            case STRUCT -> "STRUCT";
+            case REF -> "REF";
+            case ROWID -> "ROWID";
+            case SQLXML -> "SQLXML";
             case DECIMAL -> "DECIMAL";
             case DATE -> "DATE";
             case TIME -> "TIME";

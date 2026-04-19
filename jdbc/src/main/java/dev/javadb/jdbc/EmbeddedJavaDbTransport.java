@@ -153,6 +153,46 @@ final class EmbeddedJavaDbTransport implements JavaDbTransport {
     }
 
     @Override
+    public void xaPrepare(EngineApi.XidDescriptor xid) throws SQLException {
+        ensureOpen();
+        try {
+            borrowedSession.session().xaPrepare(xid);
+        } catch (RuntimeException runtimeException) {
+            throw JavaDbExceptionFactory.fromException(runtimeException);
+        }
+    }
+
+    @Override
+    public void xaCommit(EngineApi.XidDescriptor xid, boolean onePhase) throws SQLException {
+        ensureOpen();
+        try {
+            borrowedSession.session().xaCommit(xid, onePhase);
+        } catch (RuntimeException runtimeException) {
+            throw JavaDbExceptionFactory.fromException(runtimeException);
+        }
+    }
+
+    @Override
+    public void xaRollback(EngineApi.XidDescriptor xid) throws SQLException {
+        ensureOpen();
+        try {
+            borrowedSession.session().xaRollback(xid);
+        } catch (RuntimeException runtimeException) {
+            throw JavaDbExceptionFactory.fromException(runtimeException);
+        }
+    }
+
+    @Override
+    public List<EngineApi.XidDescriptor> xaRecover() throws SQLException {
+        ensureOpen();
+        try {
+            return borrowedSession.session().xaRecover();
+        } catch (RuntimeException runtimeException) {
+            throw JavaDbExceptionFactory.fromException(runtimeException);
+        }
+    }
+
+    @Override
     public Common.TupleBatch metadata(EngineIntrospection.MetadataQuery query, List<String> arguments) throws SQLException {
         ensureOpen();
         try {

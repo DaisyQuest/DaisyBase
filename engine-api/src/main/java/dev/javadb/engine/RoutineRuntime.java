@@ -233,6 +233,42 @@ final class RoutineRuntime {
             case "TRIM" -> nullSafeText(arguments.getFirst(), String::strip);
             case "SUBSTR", "SUBSTRING" -> substring(arguments);
             case "REPLACE" -> replace(arguments);
+            case "BLOB_FROM_BASE64" -> {
+                Common.Value argument = arguments.getFirst();
+                yield argument == null || argument.isNull()
+                        ? Common.Value.nullValue(Common.DataType.BLOB)
+                        : Common.Value.blob(java.util.Base64.getDecoder().decode(argument.asText()));
+            }
+            case "ARRAY_PARSE" -> {
+                Common.Value argument = arguments.getFirst();
+                yield argument == null || argument.isNull()
+                        ? Common.Value.nullValue(Common.DataType.ARRAY)
+                        : new Common.Value(Common.DataType.ARRAY, argument.asText());
+            }
+            case "STRUCT_PARSE" -> {
+                Common.Value argument = arguments.getFirst();
+                yield argument == null || argument.isNull()
+                        ? Common.Value.nullValue(Common.DataType.STRUCT)
+                        : new Common.Value(Common.DataType.STRUCT, argument.asText());
+            }
+            case "REF_PARSE" -> {
+                Common.Value argument = arguments.getFirst();
+                yield argument == null || argument.isNull()
+                        ? Common.Value.nullValue(Common.DataType.REF)
+                        : new Common.Value(Common.DataType.REF, argument.asText());
+            }
+            case "ROWID_FROM_BASE64" -> {
+                Common.Value argument = arguments.getFirst();
+                yield argument == null || argument.isNull()
+                        ? Common.Value.nullValue(Common.DataType.ROWID)
+                        : Common.Value.rowIdBytes(java.util.Base64.getDecoder().decode(argument.asText()));
+            }
+            case "XMLPARSE" -> {
+                Common.Value argument = arguments.getFirst();
+                yield argument == null || argument.isNull()
+                        ? Common.Value.nullValue(Common.DataType.SQLXML)
+                        : Common.Value.sqlxml(argument.asText());
+            }
             default -> invokeUserFunction(functionCall, arguments, transactionState);
         };
     }
@@ -449,7 +485,8 @@ final class RoutineRuntime {
             case INTEGER -> Common.Value.integer(left.asInt() + right.asInt());
             case BIGINT -> Common.Value.bigint(left.asLong() + right.asLong());
             case DECIMAL -> Common.Value.decimal(left.asDecimal().add(right.asDecimal()));
-            case BOOLEAN, TEXT, DATE, TIME, TIMESTAMP -> throw new Common.DatabaseException(Common.ErrorCode.SEMANTIC_ERROR,
+            case BOOLEAN, TEXT, BLOB, ARRAY, STRUCT, REF, ROWID, SQLXML, DATE, TIME, TIMESTAMP ->
+                    throw new Common.DatabaseException(Common.ErrorCode.SEMANTIC_ERROR,
                     "ADD is only supported on numeric values");
         };
     }
@@ -462,7 +499,8 @@ final class RoutineRuntime {
             case INTEGER -> Common.Value.integer(left.asInt() - right.asInt());
             case BIGINT -> Common.Value.bigint(left.asLong() - right.asLong());
             case DECIMAL -> Common.Value.decimal(left.asDecimal().subtract(right.asDecimal()));
-            case BOOLEAN, TEXT, DATE, TIME, TIMESTAMP -> throw new Common.DatabaseException(Common.ErrorCode.SEMANTIC_ERROR,
+            case BOOLEAN, TEXT, BLOB, ARRAY, STRUCT, REF, ROWID, SQLXML, DATE, TIME, TIMESTAMP ->
+                    throw new Common.DatabaseException(Common.ErrorCode.SEMANTIC_ERROR,
                     "SUB is only supported on numeric values");
         };
     }
@@ -475,7 +513,8 @@ final class RoutineRuntime {
             case INTEGER -> Common.Value.integer(left.asInt() * right.asInt());
             case BIGINT -> Common.Value.bigint(left.asLong() * right.asLong());
             case DECIMAL -> Common.Value.decimal(left.asDecimal().multiply(right.asDecimal()));
-            case BOOLEAN, TEXT, DATE, TIME, TIMESTAMP -> throw new Common.DatabaseException(Common.ErrorCode.SEMANTIC_ERROR,
+            case BOOLEAN, TEXT, BLOB, ARRAY, STRUCT, REF, ROWID, SQLXML, DATE, TIME, TIMESTAMP ->
+                    throw new Common.DatabaseException(Common.ErrorCode.SEMANTIC_ERROR,
                     "MUL is only supported on numeric values");
         };
     }
@@ -488,7 +527,8 @@ final class RoutineRuntime {
             case INTEGER -> Common.Value.integer(left.asInt() / right.asInt());
             case BIGINT -> Common.Value.bigint(left.asLong() / right.asLong());
             case DECIMAL -> Common.Value.decimal(left.asDecimal().divide(right.asDecimal(), MathContext.DECIMAL128));
-            case BOOLEAN, TEXT, DATE, TIME, TIMESTAMP -> throw new Common.DatabaseException(Common.ErrorCode.SEMANTIC_ERROR,
+            case BOOLEAN, TEXT, BLOB, ARRAY, STRUCT, REF, ROWID, SQLXML, DATE, TIME, TIMESTAMP ->
+                    throw new Common.DatabaseException(Common.ErrorCode.SEMANTIC_ERROR,
                     "DIV is only supported on numeric values");
         };
     }

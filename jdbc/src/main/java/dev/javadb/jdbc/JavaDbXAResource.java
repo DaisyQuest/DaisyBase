@@ -1,5 +1,7 @@
 package dev.javadb.jdbc;
 
+import dev.javadb.engine.EngineApi;
+
 import javax.transaction.xa.XAException;
 import javax.transaction.xa.XAResource;
 import javax.transaction.xa.Xid;
@@ -31,6 +33,7 @@ final class JavaDbXAResource implements XAResource {
                         throw xa(XAException.XAER_PROTO, "Another XA branch is already active");
                     }
                     connection.setAutoCommit(false);
+                    connection.ensureTransactionStarted();
                     currentXid = key;
                     ended = false;
                     prepared = false;
@@ -71,26 +74,35 @@ final class JavaDbXAResource implements XAResource {
         if (rollbackOnly) {
             throw xa(XAException.XA_RBROLLBACK, "XA branch is marked rollback-only");
         }
-        prepared = true;
+        try {
+            connection.xaPrepare(key.toDescriptor());
+            prepared = true;
+        } catch (SQLException exception) {
+            throw xa(XAException.XAER_RMERR, exception.getMessage(), exception);
+        }
         return XA_OK;
     }
 
     @Override
     public void commit(Xid xid, boolean onePhase) throws XAException {
         XidKey key = XidKey.of(xid);
-        requireCurrent(key);
-        if (rollbackOnly) {
-            throw xa(XAException.XA_RBROLLBACK, "XA branch is marked rollback-only");
-        }
-        if (!onePhase && !prepared) {
-            throw xa(XAException.XAER_PROTO, "Two-phase commit requires prepare");
-        }
-        if (!ended) {
-            throw xa(XAException.XAER_PROTO, "XA branch must be ended before commit");
-        }
         try {
-            connection.commit();
-            resetState();
+            if (onePhase) {
+                requireCurrent(key);
+                if (rollbackOnly) {
+                    throw xa(XAException.XA_RBROLLBACK, "XA branch is marked rollback-only");
+                }
+                if (!ended) {
+                    throw xa(XAException.XAER_PROTO, "XA branch must be ended before commit");
+                }
+                connection.xaCommit(key.toDescriptor(), true);
+                resetState();
+                return;
+            }
+            connection.xaCommit(key.toDescriptor(), false);
+            if (currentXid != null && currentXid.equals(key)) {
+                resetState();
+            }
         } catch (SQLException exception) {
             throw xa(XAException.XAER_RMERR, exception.getMessage(), exception);
         }
@@ -99,10 +111,11 @@ final class JavaDbXAResource implements XAResource {
     @Override
     public void rollback(Xid xid) throws XAException {
         XidKey key = XidKey.of(xid);
-        requireCurrent(key);
         try {
-            connection.rollback();
-            resetState();
+            connection.xaRollback(key.toDescriptor());
+            if (currentXid != null && currentXid.equals(key)) {
+                resetState();
+            }
         } catch (SQLException exception) {
             throw xa(XAException.XAER_RMERR, exception.getMessage(), exception);
         }
@@ -110,13 +123,25 @@ final class JavaDbXAResource implements XAResource {
 
     @Override
     public void forget(Xid xid) throws XAException {
-        requireCurrent(XidKey.of(xid));
-        resetState();
+        XidKey key = XidKey.of(xid);
+        if (currentXid != null && currentXid.equals(key)) {
+            resetState();
+        }
     }
 
     @Override
-    public Xid[] recover(int flag) {
-        return new Xid[0];
+    public Xid[] recover(int flag) throws XAException {
+        if (flag != TMSTARTRSCAN && flag != TMENDRSCAN && flag != TMNOFLAGS) {
+            throw xa(XAException.XAER_INVAL, "Unsupported XA recover flag: " + flag);
+        }
+        try {
+            return connection.xaRecover().stream()
+                    .map(XidKey::fromDescriptor)
+                    .map(XidKey::toXid)
+                    .toArray(Xid[]::new);
+        } catch (SQLException exception) {
+            throw xa(XAException.XAER_RMERR, exception.getMessage(), exception);
+        }
     }
 
     @Override
@@ -174,6 +199,18 @@ final class JavaDbXAResource implements XAResource {
             return new XidKey(xid.getFormatId(), xid.getGlobalTransactionId().clone(), xid.getBranchQualifier().clone());
         }
 
+        static XidKey fromDescriptor(EngineApi.XidDescriptor xid) {
+            return new XidKey(xid.formatId(), xid.globalId(), xid.branchId());
+        }
+
+        EngineApi.XidDescriptor toDescriptor() {
+            return new EngineApi.XidDescriptor(formatId, globalId, branchId);
+        }
+
+        Xid toXid() {
+            return new SimpleXid(formatId, globalId, branchId);
+        }
+
         @Override
         public boolean equals(Object obj) {
             return obj instanceof XidKey other
@@ -185,6 +222,23 @@ final class JavaDbXAResource implements XAResource {
         @Override
         public int hashCode() {
             return Objects.hash(formatId, Arrays.hashCode(globalId), Arrays.hashCode(branchId));
+        }
+    }
+
+    private record SimpleXid(int formatId, byte[] globalId, byte[] branchId) implements Xid {
+        @Override
+        public int getFormatId() {
+            return formatId;
+        }
+
+        @Override
+        public byte[] getGlobalTransactionId() {
+            return globalId.clone();
+        }
+
+        @Override
+        public byte[] getBranchQualifier() {
+            return branchId.clone();
         }
     }
 }

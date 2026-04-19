@@ -17,9 +17,9 @@ Primary verification:
 | --- | --- | --- | --- |
 | Driver registration and URL parsing | Embedded, Remote | Driver auto-loading, URL parsing, DataSource wiring | `jdbc/src/test/java/dev/javadb/jdbc/EmbeddedJdbcDriverTest.java`, `jdbc/src/test/java/dev/javadb/jdbc/RemoteJdbcDriverTest.java`, `jdbc/src/test/java/dev/javadb/jdbc/JavaDbPreparedSqlTest.java`, `engine-api/src/test/java/dev/javadb/engine/LaunchConfigTest.java` |
 | Connection lifecycle | Embedded, Remote | open, close, `isValid`, schema/catalog limits, client info, network timeout | `jdbc/src/test/java/dev/javadb/jdbc/EmbeddedJdbcDriverTest.java`, `jdbc/src/test/java/dev/javadb/jdbc/RemoteJdbcDriverTest.java` |
-| Remote authentication | Remote | handshake credential acceptance and rejection | `jdbc/src/test/java/dev/javadb/jdbc/RemoteJdbcDriverTest.java`, `server/src/test/java/dev/javadb/server/DatabaseProtocolServerTest.java`, `engine-api/src/test/java/dev/javadb/engine/LaunchConfigTest.java` |
+| Remote authentication and authorization | Remote | catalog-backed credential acceptance/rejection plus role/grant enforcement | `jdbc/src/test/java/dev/javadb/jdbc/RemoteJdbcDriverTest.java`, `server/src/test/java/dev/javadb/server/DatabaseProtocolServerTest.java`, `engine-api/src/test/java/dev/javadb/engine/EngineIntegrationTest.java` |
 | Transactions and savepoints | Embedded, Remote | auto-commit, explicit begin/commit/rollback, savepoint rollback | `jdbc/src/test/java/dev/javadb/jdbc/EmbeddedJdbcDriverTest.java`, `jdbc/src/test/java/dev/javadb/jdbc/RemoteJdbcDriverTest.java`, `engine-api/src/test/java/dev/javadb/engine/EngineIntegrationTest.java` |
-| XA data source | Embedded, Remote | single-branch `XADataSource` / `XAConnection` / `XAResource` prepare, commit, rollback | `jdbc/src/test/java/dev/javadb/jdbc/JavaDbXADataSourceTest.java` |
+| XA data source | Embedded, Remote | durable prepared-branch `XADataSource` / `XAConnection` / `XAResource` prepare, recover, commit, rollback across reconnect/restart | `jdbc/src/test/java/dev/javadb/jdbc/JavaDbXADataSourceTest.java`, `engine-api/src/test/java/dev/javadb/engine/EngineIntegrationTest.java` |
 | Plain statements | Embedded, Remote | execute/query/update, update counts, multi-statement batches, explain | `jdbc/src/test/java/dev/javadb/jdbc/EmbeddedJdbcDriverTest.java`, `jdbc/src/test/java/dev/javadb/jdbc/RemoteJdbcDriverTest.java` |
 | Multiple result sets | Embedded | sequential traversal and `KEEP_CURRENT_RESULT` over disconnected result sets | `jdbc/src/test/java/dev/javadb/jdbc/EmbeddedJdbcDriverTest.java` |
 | Prepared statements | Embedded, Remote | server-side prepare/describe, execution, generated-key requests, result metadata, inferred parameter metadata | `jdbc/src/test/java/dev/javadb/jdbc/EmbeddedJdbcDriverTest.java`, `jdbc/src/test/java/dev/javadb/jdbc/RemoteJdbcDriverTest.java`, `engine-api/src/test/java/dev/javadb/engine/EngineIntegrationTest.java`, `engine-api/src/test/java/dev/javadb/engine/PreparedSqlTemplateTest.java` |
@@ -27,7 +27,7 @@ Primary verification:
 | Updatable result sets | Embedded, Remote | eligible single-table primary-key queries support `CONCUR_UPDATABLE`; ineligible queries downgrade to read-only explicitly | `jdbc/src/test/java/dev/javadb/jdbc/EmbeddedJdbcDriverTest.java`, `jdbc/src/test/java/dev/javadb/jdbc/RemoteJdbcDriverTest.java` |
 | Callable statements | Embedded, Remote | procedure calls, function calls, named parameter access, output retrieval | `jdbc/src/test/java/dev/javadb/jdbc/EmbeddedJdbcDriverTest.java`, `jdbc/src/test/java/dev/javadb/jdbc/RemoteJdbcDriverTest.java`, `jdbc/src/test/java/dev/javadb/jdbc/JavaDbCallableSqlTest.java`, `engine-api/src/test/java/dev/javadb/engine/RoutineRuntimeTest.java` |
 | Callable parameter metadata | Embedded, Remote | parameter count, mode, JDBC type, precision, scale | `jdbc/src/test/java/dev/javadb/jdbc/EmbeddedJdbcDriverTest.java`, `jdbc/src/test/java/dev/javadb/jdbc/RemoteJdbcDriverTest.java` |
-| JDBC object wrappers | Embedded, Remote | disconnected `createClob/createNClob/createBlob/createSQLXML/createArrayOf/createStruct`; text-backed `Clob`/`NClob`/`SQLXML`; text-encoded `Blob`/`Array`/`Struct`/`Ref`/`RowId` parameter/result/output accessors | `jdbc/src/test/java/dev/javadb/jdbc/JdbcObjectWrapperTest.java` |
+| JDBC object wrappers | Embedded, Remote | disconnected `createClob/createNClob/createBlob/createSQLXML/createArrayOf/createStruct`; text-backed `Clob`/`NClob`/`SQLXML`; native plus compatibility `Blob`/`Array`/`Struct`/`Ref`/`RowId` parameter/result/output accessors | `jdbc/src/test/java/dev/javadb/jdbc/JdbcObjectWrapperTest.java` |
 | Generated keys | Embedded, Remote | identity-backed insert keys for `Statement` and `PreparedStatement` | `jdbc/src/test/java/dev/javadb/jdbc/EmbeddedJdbcDriverTest.java`, `jdbc/src/test/java/dev/javadb/jdbc/RemoteJdbcDriverTest.java`, `engine-api/src/test/java/dev/javadb/engine/EngineIntegrationTest.java` |
 | Result-set type mappings | Embedded, Remote | integer, bigint, decimal, boolean, text, date, time, timestamp getters | `jdbc/src/test/java/dev/javadb/jdbc/EmbeddedJdbcDriverTest.java`, `jdbc/src/test/java/dev/javadb/jdbc/RemoteJdbcDriverTest.java`, `engine-api/src/test/java/dev/javadb/engine/EngineIntegrationTest.java` |
 | Database metadata | Embedded, Remote | schemas, tables, columns, primary keys, indexes, procedures, functions, type info, capability flags | `jdbc/src/test/java/dev/javadb/jdbc/EmbeddedJdbcDriverTest.java`, `jdbc/src/test/java/dev/javadb/jdbc/RemoteJdbcDriverTest.java`, `engine-api/src/test/java/dev/javadb/engine/EngineIntrospectionTest.java` |
@@ -43,7 +43,6 @@ Primary verification:
 
 ## Known Uncovered Areas
 
-- engine-backed blob, array, struct, ref, row-id, and XML support beyond `TEXT` encodings
 - broader `SQLXML` `Source`/`Result` coverage beyond stream-backed access
-- durable XA recovery beyond one live branch/connection
-- richer authentication and authorization behavior
+- interleaved multi-branch XA behavior on a single live connection
+- richer SQL security syntax such as revoke/ownership/schema-level grants

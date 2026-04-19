@@ -17,7 +17,10 @@ public final class Transactions {
     private Transactions() {
     }
 
-    public static final class TableDelta {
+    public static final class TableDelta implements java.io.Serializable {
+        @java.io.Serial
+        private static final long serialVersionUID = 1L;
+
         private final LinkedHashMap<Common.RowId, List<Common.Value>> inserts;
         private final LinkedHashMap<Common.RowId, List<Common.Value>> updates;
         private final LinkedHashSet<Common.RowId> deletes;
@@ -52,6 +55,22 @@ public final class Transactions {
             LinkedHashMap<Common.RowId, List<Common.Value>> copiedUpdates = new LinkedHashMap<>();
             updates.forEach((rowId, values) -> copiedUpdates.put(rowId, List.copyOf(values)));
             return new TableDelta(copiedInserts, copiedUpdates, new LinkedHashSet<>(deletes));
+        }
+    }
+
+    public record PreparedState(Common.TransactionId transactionId, Common.IsolationLevel isolationLevel,
+                                long snapshotSequence, List<Catalog.CatalogChange> catalogChanges,
+                                Map<Common.ObjectId, TableDelta> tableDeltas) implements java.io.Serializable {
+        @java.io.Serial
+        private static final long serialVersionUID = 1L;
+
+        public PreparedState {
+            catalogChanges = catalogChanges == null ? List.of() : List.copyOf(catalogChanges);
+            LinkedHashMap<Common.ObjectId, TableDelta> copied = new LinkedHashMap<>();
+            if (tableDeltas != null) {
+                tableDeltas.forEach((tableId, delta) -> copied.put(tableId, delta.copy()));
+            }
+            tableDeltas = copied;
         }
     }
 
@@ -177,6 +196,11 @@ public final class Transactions {
             savepoints.clear();
         }
 
+        public PreparedState freezeForPrepare() {
+            return new PreparedState(transactionId, isolationLevel, snapshotSequence,
+                    List.copyOf(catalogChanges), tableDeltas());
+        }
+
         private void restore(SavepointState state) {
             catalogSnapshot = state.catalogSnapshot();
             catalogChanges.clear();
@@ -214,6 +238,18 @@ public final class Transactions {
 
         public void setLastCommitSequence(long value) {
             lastCommitSequence.set(value);
+        }
+
+        public TransactionState restorePrepared(PreparedState preparedState, Catalog.CatalogSnapshot currentCatalog) {
+            TransactionState restored = new TransactionState(
+                    preparedState.transactionId(),
+                    preparedState.isolationLevel(),
+                    preparedState.snapshotSequence(),
+                    currentCatalog,
+                    tempRowIds);
+            preparedState.catalogChanges().forEach(restored.catalogChanges::add);
+            preparedState.tableDeltas().forEach((tableId, delta) -> restored.tableDeltas.put(tableId, delta.copy()));
+            return restored;
         }
     }
 }

@@ -8,16 +8,18 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.math.BigDecimal;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -248,6 +250,115 @@ class RemoteProtocolTest {
         assertEquals(LocalDate.parse("2026-04-19"), row.get(1).asDate());
         assertEquals(LocalTime.parse("10:15:30"), row.get(2).asTime());
         assertEquals(LocalDateTime.parse("2026-04-19T10:15:30"), row.get(3).asTimestamp());
+    }
+
+    @Test
+    void roundTripsNativeObjectValuesAcrossExecuteResults() throws Exception {
+        EngineApi.BatchResult batchResult = new EngineApi.BatchResult(List.of(
+                new EngineApi.StatementResult("SELECT", 0,
+                        new Common.TupleBatch(
+                                List.of(
+                                        new Common.ResultColumn("payload", Common.DataType.BLOB),
+                                        new Common.ResultColumn("tags", Common.DataType.ARRAY),
+                                        new Common.ResultColumn("address", Common.DataType.STRUCT),
+                                        new Common.ResultColumn("owner_ref", Common.DataType.REF),
+                                        new Common.ResultColumn("rid", Common.DataType.ROWID),
+                                        new Common.ResultColumn("doc", Common.DataType.SQLXML)
+                                ),
+                                List.of(new Common.ResultRow(List.of(
+                                        Common.Value.blob(new byte[]{1, 2, 3}),
+                                        Common.Value.array(new Common.ArrayValue("TEXT", List.of(
+                                                Common.Value.text("red"),
+                                                Common.Value.text("blue")
+                                        ))),
+                                        Common.Value.struct(new Common.StructValue("address_type", List.of(
+                                                Common.Value.text("Boston"),
+                                                Common.Value.integer(21)
+                                        ))),
+                                        Common.Value.ref(new Common.RefValue("docs", Common.Value.bigint(77L))),
+                                        Common.Value.rowIdBytes(new byte[]{9, 8, 7}),
+                                        Common.Value.sqlxml("<doc id=\"7\"/>")
+                                )))),
+                        Common.TupleBatch.empty(),
+                        "TableScan(table=objects)")
+        ));
+
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        RemoteProtocol.write(output, new RemoteProtocol.ExecuteResult(22, batchResult));
+        RemoteProtocol.ExecuteResult decoded = assertInstanceOf(RemoteProtocol.ExecuteResult.class,
+                RemoteProtocol.read(new ByteArrayInputStream(output.toByteArray())));
+
+        Common.ResultRow row = decoded.result().statements().getFirst().batch().rows().getFirst();
+        assertArrayEquals(new byte[]{1, 2, 3}, row.get(0).asBytes());
+        assertEquals("TEXT", row.get(1).asArray().baseTypeName());
+        assertEquals("red", row.get(1).asArray().elements().get(0).asText());
+        assertEquals("address_type", row.get(2).asStruct().sqlTypeName());
+        assertEquals(21, row.get(2).asStruct().attributes().get(1).asInt());
+        assertEquals("docs", row.get(3).asRef().baseTypeName());
+        assertEquals(77L, row.get(3).asRef().referencedValue().asLong());
+        assertArrayEquals(new byte[]{9, 8, 7}, row.get(4).asRowIdBytes());
+        assertEquals("<doc id=\"7\"/>", row.get(5).asSqlXml());
+    }
+
+    @Test
+    void normalizesNullableProtocolFieldsAndRejectsBlankTokens() {
+        RemoteProtocol.ClientHello hello = new RemoteProtocol.ClientHello("   ", RemoteProtocol.VERSION, null, null);
+        assertEquals("unknown", hello.clientName());
+        assertEquals("", hello.user());
+        assertEquals("", hello.password());
+
+        RemoteProtocol.TransactionRequest transaction = new RemoteProtocol.TransactionRequest(1, "   ", null);
+        assertEquals("UNKNOWN", transaction.operation());
+        assertEquals("", transaction.argument());
+
+        RemoteProtocol.MetadataRequest metadata = new RemoteProtocol.MetadataRequest(2, null, Arrays.asList("public", null));
+        assertEquals("UNKNOWN", metadata.operation());
+        assertEquals(List.of("public", ""), metadata.arguments());
+
+        RemoteProtocol.ExecutePreparedRequest executePrepared = new RemoteProtocol.ExecutePreparedRequest(3, 4, Arrays.asList("1", null), 0);
+        assertEquals(List.of("1", "NULL"), executePrepared.parameterLiterals());
+
+        RemoteProtocol.Failure failure = new RemoteProtocol.Failure(4, "  bad  ", null, null, false);
+        assertEquals("bad", failure.code());
+        assertEquals("", failure.message());
+        assertEquals(Common.SourceSpan.NONE, failure.span());
+
+        assertEquals("", new RemoteProtocol.CloseRequest(null).reason());
+        assertEquals("", new RemoteProtocol.Goodbye(null).message());
+        assertThrows(IllegalArgumentException.class, () -> new RemoteProtocol.ServerHello("server",
+                RemoteProtocol.VERSION, RemoteProtocol.DEFAULT_MAX_FRAME_BYTES, " "));
+        assertThrows(IllegalArgumentException.class,
+                () -> new RemoteProtocol.CancelRequest(5, " ", 6));
+    }
+
+    @Test
+    void rejectsTruncatedBlobPayloads() throws Exception {
+        ByteArrayOutputStream invalidTypePayload = new ByteArrayOutputStream();
+        try (DataOutputStream output = new DataOutputStream(invalidTypePayload)) {
+            output.writeLong(5L);
+            output.writeInt(1);
+            writeString(output, "SELECT");
+            output.writeLong(0L);
+            writeString(output, "");
+            output.writeInt(1);
+            writeString(output, "payload");
+            output.writeByte(Common.DataType.BLOB.ordinal());
+            output.writeInt(-1);
+            output.writeInt(-1);
+            output.writeInt(1);
+            output.writeInt(1);
+            output.writeByte(Common.DataType.BLOB.ordinal());
+            output.writeBoolean(false);
+            output.writeInt(4);
+            output.write(new byte[]{1, 2});
+            output.writeInt(0);
+            output.writeInt(0);
+        }
+
+        EOFException truncated = assertThrows(EOFException.class,
+                () -> RemoteProtocol.read(new ByteArrayInputStream(rawFrame(RemoteProtocol.MAGIC, RemoteProtocol.VERSION, 4,
+                        invalidTypePayload.toByteArray()))));
+        assertTrue(truncated.getMessage() == null || truncated.getMessage().contains("Unexpected end of stream"));
     }
 
     private byte[] rawFrame(int magic, short version, int typeCode, byte[] payload) throws Exception {

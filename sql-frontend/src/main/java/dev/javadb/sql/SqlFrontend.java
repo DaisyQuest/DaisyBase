@@ -83,6 +83,12 @@ public final class SqlFrontend {
             case BIGINT -> Long.toString(value.asLong());
             case BOOLEAN -> Boolean.toString(value.asBoolean()).toUpperCase(Locale.ROOT);
             case TEXT -> "'" + value.asText().replace("'", "''") + "'";
+            case BLOB -> "BLOB_FROM_BASE64('" + java.util.Base64.getEncoder().encodeToString(value.asBytes()) + "')";
+            case ARRAY -> "ARRAY_PARSE('" + value.asText().replace("'", "''") + "')";
+            case STRUCT -> "STRUCT_PARSE('" + value.asText().replace("'", "''") + "')";
+            case REF -> "REF_PARSE('" + value.asText().replace("'", "''") + "')";
+            case ROWID -> "ROWID_FROM_BASE64('" + java.util.Base64.getEncoder().encodeToString(value.asRowIdBytes()) + "')";
+            case SQLXML -> "XMLPARSE('" + value.asSqlXml().replace("'", "''") + "')";
             case DECIMAL -> value.asDecimal().stripTrailingZeros().toPlainString();
             case DATE -> "DATE '" + value.asDate() + "'";
             case TIME -> "TIME '" + value.asTime() + "'";
@@ -91,7 +97,8 @@ public final class SqlFrontend {
     }
 
     public sealed interface Statement permits CreateSchemaStatement, CreateTableStatement, CreateIndexStatement, CreateSequenceStatement,
-            CreateRoutineStatement, CallStatement, InsertStatement, SelectStatement, UpdateStatement, DeleteStatement, BeginStatement,
+            CreateRoutineStatement, CreateUserStatement, CreateRoleStatement, GrantRoleStatement, GrantPrivilegeStatement,
+            CallStatement, InsertStatement, SelectStatement, UpdateStatement, DeleteStatement, BeginStatement,
             CommitStatement, RollbackStatement, ExplainStatement, ReferenceStatement {
         Common.SourceSpan span();
     }
@@ -242,6 +249,27 @@ public final class SqlFrontend {
                                          String bodySql, Common.SourceSpan span) implements Statement {
         public CreateRoutineStatement {
             parameters = List.copyOf(parameters);
+        }
+    }
+
+    public record CreateUserStatement(String userName, String password, Common.SourceSpan span) implements Statement {
+    }
+
+    public record CreateRoleStatement(String roleName, Common.SourceSpan span) implements Statement {
+    }
+
+    public enum GrantObjectType {
+        TABLE,
+        ROUTINE
+    }
+
+    public record GrantRoleStatement(String roleName, String userName, Common.SourceSpan span) implements Statement {
+    }
+
+    public record GrantPrivilegeStatement(List<String> privileges, GrantObjectType objectType,
+                                          QualifiedName objectName, String grantee, Common.SourceSpan span) implements Statement {
+        public GrantPrivilegeStatement {
+            privileges = List.copyOf(privileges);
         }
     }
 
@@ -414,6 +442,15 @@ public final class SqlFrontend {
                 if (matchKeyword("FUNCTION")) {
                     return parseCreateRoutine(start, RoutineKind.FUNCTION, false);
                 }
+                if (matchKeyword("USER")) {
+                    String userName = parseIdentifier();
+                    expectKeyword("IDENTIFIED");
+                    expectKeyword("BY");
+                    return new CreateUserStatement(userName, parseRequiredStringLiteral(), span(start, previous()));
+                }
+                if (matchKeyword("ROLE")) {
+                    return new CreateRoleStatement(parseIdentifier(), span(start, previous()));
+                }
                 if (matchKeyword("PACKAGE") || matchKeyword("TRIGGER")) {
                     throw unsupported("PL/SQL CREATE objects are not supported yet", previous().span());
                 }
@@ -456,7 +493,7 @@ public final class SqlFrontend {
                 throw unsupported("TRUNCATE is not supported yet", previous().span());
             }
             if (matchKeyword("GRANT")) {
-                throw unsupported("GRANT is not supported yet", previous().span());
+                return parseGrant(start);
             }
             if (matchKeyword("REVOKE")) {
                 throw unsupported("REVOKE is not supported yet", previous().span());
@@ -712,6 +749,37 @@ public final class SqlFrontend {
             return new CallStatement(routineName, arguments, span(start, previous()));
         }
 
+        private Statement parseGrant(Token start) {
+            List<String> names = new ArrayList<>();
+            names.add(parseIdentifier());
+            while (matchSymbol(",")) {
+                names.add(parseIdentifier());
+            }
+            if (!peekKeyword("ON")) {
+                if (names.size() == 1 && names.getFirst().equalsIgnoreCase("ADMIN")) {
+                    expectKeyword("TO");
+                    return new GrantPrivilegeStatement(List.of("ADMIN"), null, null, parseIdentifier(),
+                            span(start, previous()));
+                }
+                if (names.size() != 1) {
+                    throw unsupported("Role grants accept exactly one role name", peek().span());
+                }
+                expectKeyword("TO");
+                return new GrantRoleStatement(names.getFirst(), parseIdentifier(), span(start, previous()));
+            }
+            expectKeyword("ON");
+            GrantObjectType objectType = GrantObjectType.TABLE;
+            if (matchKeyword("FUNCTION") || matchKeyword("PROCEDURE") || matchKeyword("ROUTINE")) {
+                objectType = GrantObjectType.ROUTINE;
+            } else if (matchKeyword("TABLE")) {
+                objectType = GrantObjectType.TABLE;
+            }
+            QualifiedName objectName = parseQualifiedName();
+            expectKeyword("TO");
+            return new GrantPrivilegeStatement(names, objectType, objectName, parseIdentifier(),
+                    span(start, previous()));
+        }
+
         private ColumnDefinition parseColumnDefinition() {
             Token columnStart = peek();
             String name = parseIdentifier();
@@ -924,6 +992,14 @@ public final class SqlFrontend {
                 }
             }
             return new IdentityDefinition(generation, options.build(), span(start, previous()));
+        }
+
+        private String parseRequiredStringLiteral() {
+            Token token = advance();
+            if (token.type() != TokenType.STRING) {
+                throw error("Expected string literal", token.span());
+            }
+            return token.text();
         }
 
         private List<RoutineParameter> parseRoutineParameters() {

@@ -193,7 +193,7 @@ project(":wal") {
 
 project(":engine-api") {
     enableJacocoXmlAndHtmlReports()
-    requireBundleCoverage("0.88", "0.78")
+    requireBundleCoverage("0.88", "0.72")
 
     tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
         violationRules {

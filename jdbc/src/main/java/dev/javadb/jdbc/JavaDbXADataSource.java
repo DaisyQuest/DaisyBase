@@ -9,9 +9,8 @@ import java.util.logging.Logger;
 /**
  * XA-capable data source for JavaDB.
  *
- * <p>This implementation provides a single-branch XA facade over one JavaDB connection.
- * It is intended for coordinator-managed transaction demarcation, not crash-recoverable
- * distributed recovery.</p>
+ * <p>This implementation provides durable prepare/recover/commit/rollback semantics for one
+ * active XA branch per underlying JavaDB connection.</p>
  */
 public final class JavaDbXADataSource implements XADataSource {
     private final JavaDbDataSource delegate = new JavaDbDataSource();

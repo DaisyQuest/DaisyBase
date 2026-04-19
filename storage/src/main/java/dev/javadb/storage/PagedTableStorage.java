@@ -182,8 +182,8 @@ final class PagedTableStorage {
                     case INTEGER -> Integer.BYTES;
                     case BIGINT -> Long.BYTES;
                     case BOOLEAN -> 1;
-                    case TEXT -> Integer.BYTES + value.asText().getBytes(StandardCharsets.UTF_8).length;
-                    case DECIMAL, TIMESTAMP -> Integer.BYTES + value.asText().getBytes(StandardCharsets.UTF_8).length;
+                    case TEXT, DECIMAL, TIMESTAMP, ARRAY, STRUCT, REF, SQLXML -> Integer.BYTES + variablePayload(value).length;
+                    case BLOB, ROWID -> Integer.BYTES + variablePayload(value).length;
                     case DATE, TIME -> Long.BYTES;
                 };
             }
@@ -204,13 +204,8 @@ final class PagedTableStorage {
                 case INTEGER -> buffer.putInt(normalized.asInt());
                 case BIGINT -> buffer.putLong(normalized.asLong());
                 case BOOLEAN -> buffer.put((byte) (normalized.asBoolean() ? 1 : 0));
-                case TEXT -> {
-                    byte[] encoded = normalized.asText().getBytes(StandardCharsets.UTF_8);
-                    buffer.putInt(encoded.length);
-                    buffer.put(encoded);
-                }
-                case DECIMAL, TIMESTAMP -> {
-                    byte[] encoded = normalized.asText().getBytes(StandardCharsets.UTF_8);
+                case TEXT, DECIMAL, TIMESTAMP, ARRAY, STRUCT, REF, SQLXML, BLOB, ROWID -> {
+                    byte[] encoded = variablePayload(normalized);
                     buffer.putInt(encoded.length);
                     buffer.put(encoded);
                 }
@@ -238,29 +233,47 @@ final class PagedTableStorage {
                 case INTEGER -> Common.Value.integer(buffer.getInt());
                 case BIGINT -> Common.Value.bigint(buffer.getLong());
                 case BOOLEAN -> Common.Value.bool(buffer.get() != 0);
-                case TEXT -> {
+                case TEXT, DECIMAL, TIMESTAMP, ARRAY, STRUCT, REF, SQLXML, BLOB, ROWID -> {
                     int length = buffer.getInt();
                     byte[] encoded = new byte[length];
                     buffer.get(encoded);
-                    yield Common.Value.text(new String(encoded, StandardCharsets.UTF_8));
-                }
-                case DECIMAL -> {
-                    int length = buffer.getInt();
-                    byte[] encoded = new byte[length];
-                    buffer.get(encoded);
-                    yield Common.Value.decimal(new java.math.BigDecimal(new String(encoded, StandardCharsets.UTF_8)));
+                    yield decodeVariableValue(type, encoded);
                 }
                 case DATE -> Common.Value.date(java.time.LocalDate.ofEpochDay(buffer.getLong()));
                 case TIME -> Common.Value.time(java.time.LocalTime.ofNanoOfDay(buffer.getLong()));
-                case TIMESTAMP -> {
-                    int length = buffer.getInt();
-                    byte[] encoded = new byte[length];
-                    buffer.get(encoded);
-                    yield Common.Value.timestamp(Common.Value.parseTimestamp(new String(encoded, StandardCharsets.UTF_8)));
-                }
             });
         }
         return new Storage.RowVersion(rowId, createdAt, deletedAt, values);
+    }
+
+    private static byte[] variablePayload(Common.Value value) {
+        return switch (value.type()) {
+            case TEXT, DECIMAL, TIMESTAMP, ARRAY, STRUCT, REF, SQLXML ->
+                    value.asText().getBytes(StandardCharsets.UTF_8);
+            case BLOB -> value.asBytes();
+            case ROWID -> value.asRowIdBytes();
+            case INTEGER, BIGINT, BOOLEAN, DATE, TIME ->
+                    throw new IllegalStateException("Type " + value.type() + " is not length-encoded");
+        };
+    }
+
+    private static Common.Value decodeVariableValue(Common.DataType type, byte[] encoded) {
+        return switch (type) {
+            case TEXT -> Common.Value.text(new String(encoded, StandardCharsets.UTF_8));
+            case DECIMAL -> Common.Value.decimal(new java.math.BigDecimal(new String(encoded, StandardCharsets.UTF_8)));
+            case TIMESTAMP -> Common.Value.timestamp(Common.Value.parseTimestamp(new String(encoded, StandardCharsets.UTF_8)));
+            case ARRAY -> Common.Value.array((Common.ArrayValue) new Common.Value(Common.DataType.ARRAY,
+                    new String(encoded, StandardCharsets.UTF_8)).raw());
+            case STRUCT -> Common.Value.struct((Common.StructValue) new Common.Value(Common.DataType.STRUCT,
+                    new String(encoded, StandardCharsets.UTF_8)).raw());
+            case REF -> Common.Value.ref((Common.RefValue) new Common.Value(Common.DataType.REF,
+                    new String(encoded, StandardCharsets.UTF_8)).raw());
+            case SQLXML -> Common.Value.sqlxml(new String(encoded, StandardCharsets.UTF_8));
+            case BLOB -> Common.Value.blob(encoded);
+            case ROWID -> Common.Value.rowIdBytes(encoded);
+            case INTEGER, BIGINT, BOOLEAN, DATE, TIME ->
+                    throw new IllegalStateException("Type " + type + " is not length-encoded");
+        };
     }
 
     private static List<byte[]> buildPages(List<byte[]> records) {

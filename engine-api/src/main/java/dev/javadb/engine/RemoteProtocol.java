@@ -519,6 +519,12 @@ public final class RemoteProtocol {
             case BIGINT -> output.writeLong(value.asLong());
             case BOOLEAN -> output.writeBoolean(value.asBoolean());
             case TEXT -> writeString(output, value.asText());
+            case BLOB -> writeBytes(output, value.asBytes());
+            case ARRAY -> writeString(output, value.asText());
+            case STRUCT -> writeString(output, value.asText());
+            case REF -> writeString(output, value.asText());
+            case ROWID -> writeBytes(output, value.asRowIdBytes());
+            case SQLXML -> writeString(output, value.asSqlXml());
             case DECIMAL -> writeString(output, value.asDecimal().toPlainString());
             case DATE -> output.writeLong(value.asDate().toEpochDay());
             case TIME -> output.writeLong(value.asTime().toNanoOfDay());
@@ -537,6 +543,12 @@ public final class RemoteProtocol {
             case BIGINT -> Common.Value.bigint(input.readLong());
             case BOOLEAN -> Common.Value.bool(input.readBoolean());
             case TEXT -> Common.Value.text(readString(input));
+            case BLOB -> Common.Value.blob(readBytes(input));
+            case ARRAY -> new Common.Value(Common.DataType.ARRAY, readString(input));
+            case STRUCT -> new Common.Value(Common.DataType.STRUCT, readString(input));
+            case REF -> new Common.Value(Common.DataType.REF, readString(input));
+            case ROWID -> Common.Value.rowIdBytes(readBytes(input));
+            case SQLXML -> Common.Value.sqlxml(readString(input));
             case DECIMAL -> Common.Value.decimal(new java.math.BigDecimal(readString(input)));
             case DATE -> Common.Value.date(java.time.LocalDate.ofEpochDay(input.readLong()));
             case TIME -> Common.Value.time(java.time.LocalTime.ofNanoOfDay(input.readLong()));
@@ -577,6 +589,20 @@ public final class RemoteProtocol {
             throw new EOFException("Unexpected end of stream while reading string");
         }
         return new String(bytes, StandardCharsets.UTF_8);
+    }
+
+    private static void writeBytes(DataOutputStream output, byte[] value) throws IOException {
+        output.writeInt(value.length);
+        output.write(value);
+    }
+
+    private static byte[] readBytes(DataInputStream input) throws IOException {
+        int length = readCount(input);
+        byte[] bytes = input.readNBytes(length);
+        if (bytes.length != length) {
+            throw new EOFException("Unexpected end of stream while reading byte array");
+        }
+        return bytes;
     }
 
     private static int readCount(DataInputStream input) throws IOException {

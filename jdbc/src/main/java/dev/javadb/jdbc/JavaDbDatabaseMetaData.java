@@ -84,7 +84,7 @@ final class JavaDbDatabaseMetaData {
                     }
                     case "getResultSetHoldability" -> ResultSet.CLOSE_CURSORS_AT_COMMIT;
                     case "supportsResultSetHoldability" -> (int) args[0] == ResultSet.CLOSE_CURSORS_AT_COMMIT;
-                    case "getRowIdLifetime" -> RowIdLifetime.ROWID_UNSUPPORTED;
+                    case "getRowIdLifetime" -> RowIdLifetime.ROWID_VALID_SESSION;
                     case "supportsGetGeneratedKeys", "supportsNamedParameters",
                             "supportsMultipleResultSets", "supportsMultipleOpenResults" -> true;
                     case "generatedKeyAlwaysReturned" -> false;
@@ -192,6 +192,12 @@ final class JavaDbDatabaseMetaData {
                         typeInfoRow("DECIMAL", java.sql.Types.DECIMAL, 38, false),
                         typeInfoRow("BOOLEAN", java.sql.Types.BOOLEAN, 1, false),
                         typeInfoRow("TEXT", java.sql.Types.VARCHAR, 32_767, true),
+                        typeInfoRow("BLOB", java.sql.Types.BLOB, 1_048_576, false),
+                        typeInfoRow("ARRAY", java.sql.Types.ARRAY, 32_767, false),
+                        typeInfoRow("STRUCT", java.sql.Types.STRUCT, 32_767, false),
+                        typeInfoRow("REF", java.sql.Types.REF, 32_767, false),
+                        typeInfoRow("ROWID", java.sql.Types.ROWID, 256, false),
+                        typeInfoRow("SQLXML", java.sql.Types.SQLXML, 1_048_576, true),
                         typeInfoRow("DATE", java.sql.Types.DATE, 10, false),
                         typeInfoRow("TIME", java.sql.Types.TIME, 12, false),
                         typeInfoRow("TIMESTAMP", java.sql.Types.TIMESTAMP, 29, false)

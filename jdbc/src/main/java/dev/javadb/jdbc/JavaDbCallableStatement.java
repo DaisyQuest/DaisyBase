@@ -252,7 +252,17 @@ final class JavaDbCallableStatement extends JavaDbPreparedStatement implements C
 
     @Override
     public byte[] getBytes(int parameterIndex) throws SQLException {
-        return JavaDbJdbcObjects.toBinary(JavaDbJdbcObjects.requireTextValue(output(parameterIndex), "byte[] outputs"));
+        Common.Value value = output(parameterIndex);
+        if (value == null || value.isNull()) {
+            return null;
+        }
+        if (value.type() == Common.DataType.BLOB) {
+            return value.asBytes();
+        }
+        if (value.type() == Common.DataType.ROWID) {
+            return value.asRowIdBytes();
+        }
+        return JavaDbJdbcObjects.toBinary(JavaDbJdbcObjects.requireTextValue(value, "byte[] outputs"));
     }
 
     @Override
@@ -290,12 +300,12 @@ final class JavaDbCallableStatement extends JavaDbPreparedStatement implements C
 
     @Override
     public Ref getRef(int parameterIndex) throws SQLException {
-        return JavaDbJdbcObjects.toRef(JavaDbJdbcObjects.requireTextValue(output(parameterIndex), "Ref outputs"));
+        return JavaDbJdbcObjects.toRef(output(parameterIndex));
     }
 
     @Override
     public Blob getBlob(int parameterIndex) throws SQLException {
-        return JavaDbJdbcObjects.toBlob(JavaDbJdbcObjects.requireTextValue(output(parameterIndex), "Blob outputs"));
+        return JavaDbJdbcObjects.toBlob(output(parameterIndex));
     }
 
     @Override
@@ -305,7 +315,7 @@ final class JavaDbCallableStatement extends JavaDbPreparedStatement implements C
 
     @Override
     public Array getArray(int parameterIndex) throws SQLException {
-        return JavaDbJdbcObjects.toArray(JavaDbJdbcObjects.requireTextValue(output(parameterIndex), "Array outputs"));
+        return JavaDbJdbcObjects.toArray(output(parameterIndex));
     }
 
     @Override
@@ -334,7 +344,7 @@ final class JavaDbCallableStatement extends JavaDbPreparedStatement implements C
 
     @Override
     public RowId getRowId(int parameterIndex) throws SQLException {
-        return JavaDbJdbcObjects.toRowId(JavaDbJdbcObjects.requireTextValue(output(parameterIndex), "RowId outputs"));
+        return JavaDbJdbcObjects.toRowId(output(parameterIndex));
     }
 
     @Override
@@ -344,7 +354,7 @@ final class JavaDbCallableStatement extends JavaDbPreparedStatement implements C
 
     @Override
     public SQLXML getSQLXML(int parameterIndex) throws SQLException {
-        return JavaDbJdbcObjects.toSqlXml(JavaDbJdbcObjects.requireTextValue(output(parameterIndex), "SQLXML outputs"));
+        return JavaDbJdbcObjects.toSqlXml(output(parameterIndex));
     }
 
     @Override
@@ -389,8 +399,7 @@ final class JavaDbCallableStatement extends JavaDbPreparedStatement implements C
             return type.cast(getArray(parameterIndex));
         }
         if (type == java.sql.Struct.class) {
-            return type.cast(JavaDbJdbcObjects.toStruct(
-                    JavaDbJdbcObjects.requireTextValue(output(parameterIndex), "Struct outputs")));
+            return type.cast(JavaDbJdbcObjects.toStruct(output(parameterIndex)));
         }
         if (type == Ref.class) {
             return type.cast(getRef(parameterIndex));
@@ -827,20 +836,8 @@ final class JavaDbCallableStatement extends JavaDbPreparedStatement implements C
         return callableSql.toExternalParameterIndex(parameter.ordinal() - 1);
     }
 
-    private Object toJdbcValue(Common.Value value) {
-        if (value == null || value.isNull()) {
-            return null;
-        }
-        return switch (value.type()) {
-            case INTEGER -> value.asInt();
-            case BIGINT -> value.asLong();
-            case BOOLEAN -> value.asBoolean();
-            case TEXT -> value.asText();
-            case DECIMAL -> value.asDecimal();
-            case DATE -> Date.valueOf(value.asDate());
-            case TIME -> Time.valueOf(value.asTime());
-            case TIMESTAMP -> Timestamp.valueOf(value.asTimestamp());
-        };
+    private Object toJdbcValue(Common.Value value) throws SQLException {
+        return JavaDbJdbcObjects.toJdbcValue(value);
     }
 
     private SQLFeatureNotSupportedException unsupported(String feature) {

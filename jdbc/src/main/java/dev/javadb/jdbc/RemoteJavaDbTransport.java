@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.sql.SQLException;
+import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -153,6 +154,36 @@ final class RemoteJavaDbTransport implements JavaDbTransport {
     }
 
     @Override
+    public synchronized void xaPrepare(EngineApi.XidDescriptor xid) throws SQLException {
+        exchange(new RemoteProtocol.TransactionRequest(nextRequestId.getAndIncrement(), "XA_PREPARE", encodeXid(xid)),
+                RemoteProtocol.TransactionResult.class);
+    }
+
+    @Override
+    public synchronized void xaCommit(EngineApi.XidDescriptor xid, boolean onePhase) throws SQLException {
+        String argument = (onePhase ? "1" : "0") + "|" + encodeXid(xid);
+        exchange(new RemoteProtocol.TransactionRequest(nextRequestId.getAndIncrement(), "XA_COMMIT", argument),
+                RemoteProtocol.TransactionResult.class);
+    }
+
+    @Override
+    public synchronized void xaRollback(EngineApi.XidDescriptor xid) throws SQLException {
+        exchange(new RemoteProtocol.TransactionRequest(nextRequestId.getAndIncrement(), "XA_ROLLBACK", encodeXid(xid)),
+                RemoteProtocol.TransactionResult.class);
+    }
+
+    @Override
+    public synchronized List<EngineApi.XidDescriptor> xaRecover() throws SQLException {
+        Common.TupleBatch batch = metadata(EngineIntrospection.MetadataQuery.XA_RECOVER, List.of());
+        return batch.rows().stream()
+                .map(row -> new EngineApi.XidDescriptor(
+                        row.get(0).asInt(),
+                        row.get(1).asBytes(),
+                        row.get(2).asBytes()))
+                .toList();
+    }
+
+    @Override
     public synchronized Common.TupleBatch metadata(EngineIntrospection.MetadataQuery query, List<String> arguments) throws SQLException {
         return exchange(new RemoteProtocol.MetadataRequest(nextRequestId.getAndIncrement(), query.name(), arguments),
                 RemoteProtocol.MetadataResult.class).batch();
@@ -239,5 +270,11 @@ final class RemoteJavaDbTransport implements JavaDbTransport {
         if (closed) {
             throw new SQLException("Transport is closed");
         }
+    }
+
+    private static String encodeXid(EngineApi.XidDescriptor xid) {
+        return xid.formatId() + "|"
+                + Base64.getUrlEncoder().withoutPadding().encodeToString(xid.globalId()) + "|"
+                + Base64.getUrlEncoder().withoutPadding().encodeToString(xid.branchId());
     }
 }

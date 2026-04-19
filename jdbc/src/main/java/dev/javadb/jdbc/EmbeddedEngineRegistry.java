@@ -27,7 +27,8 @@ final class EmbeddedEngineRegistry {
             throw new SQLException("Embedded engine already open with a different configuration for " + home);
         }
         entry.referenceCount++;
-        return new BorrowedSession(home, entry.engine, entry.engine.openSession());
+        String principal = url.user().isBlank() ? "system" : url.user();
+        return new BorrowedSession(home, entry.engine, entry.engine.openSession(principal));
     }
 
     static synchronized void release(BorrowedSession borrowedSession) throws SQLException {

@@ -91,49 +91,111 @@ class JavaDbXADataSourceTest {
     }
 
     @Test
-    void remoteXaDataSourceSupportsAuthenticatedSingleBranchTransactions() throws Exception {
-        try (EngineApi.DatabaseEngine engine = EmbeddedDatabaseEngine.open(tempDir);
-             JavaDbServer server = JavaDbServer.start(engine, 0, "app", "secret")) {
-            String url = "jdbc:javadb:remote://" + InetAddress.getLoopbackAddress().getHostAddress() + ":" + server.port();
-            JavaDbXADataSource dataSource = new JavaDbXADataSource();
-            dataSource.setUrl(url);
-            dataSource.setUser("app");
-            dataSource.setPassword("secret");
+    void embeddedXaRecoverySurvivesConnectionCloseAndRecover() throws Exception {
+        JavaDbXADataSource dataSource = new JavaDbXADataSource();
+        dataSource.setUrl("jdbc:javadb:embedded:" + tempDir);
 
-            javax.sql.XAConnection bootstrapXa = dataSource.getXAConnection();
-            try (Connection bootstrap = bootstrapXa.getConnection();
-                 Statement statement = bootstrap.createStatement()) {
-                statement.execute("CREATE TABLE remote_xa_logs (id INT PRIMARY KEY, note TEXT NOT NULL);");
-            } finally {
-                bootstrapXa.close();
+        javax.sql.XAConnection bootstrapXa = dataSource.getXAConnection();
+        try (Connection bootstrap = bootstrapXa.getConnection();
+             Statement statement = bootstrap.createStatement()) {
+            statement.execute("CREATE TABLE xa_recover (id INT PRIMARY KEY, note TEXT NOT NULL);");
+        } finally {
+            bootstrapXa.close();
+        }
+
+        Xid xid = new TestXid(9, new byte[]{9}, new byte[]{1});
+        XAConnection xaConnection = dataSource.getXAConnection();
+        try {
+            XAResource resource = xaConnection.getXAResource();
+            try (Connection connection = xaConnection.getConnection();
+                 PreparedStatement insert = connection.prepareStatement("INSERT INTO xa_recover VALUES (?, ?)")) {
+                resource.start(xid, XAResource.TMNOFLAGS);
+                insert.setInt(1, 1);
+                insert.setString(2, "prepared");
+                insert.executeUpdate();
+                resource.end(xid, XAResource.TMSUCCESS);
+                assertEquals(XAResource.XA_OK, resource.prepare(xid));
             }
+        } finally {
+            xaConnection.close();
+        }
+
+        xaConnection = dataSource.getXAConnection();
+        try {
+            XAResource resource = xaConnection.getXAResource();
+            Xid[] recovered = resource.recover(XAResource.TMSTARTRSCAN);
+            assertEquals(1, recovered.length);
+            resource.commit(recovered[0], false);
+        } finally {
+            xaConnection.close();
+        }
+
+        xaConnection = dataSource.getXAConnection();
+        try (Connection connection = xaConnection.getConnection();
+             Statement statement = connection.createStatement();
+             ResultSet resultSet = statement.executeQuery("SELECT note FROM xa_recover")) {
+            assertTrue(resultSet.next());
+            assertEquals("prepared", resultSet.getString(1));
+        } finally {
+            xaConnection.close();
+        }
+    }
+
+    @Test
+    void remoteXaDataSourceSupportsAuthenticatedRecoveryAcrossRestart() throws Exception {
+        String url;
+        try (EngineApi.DatabaseEngine engine = EmbeddedDatabaseEngine.open(tempDir);
+             EngineApi.Session session = engine.openSession()) {
+            session.execute("CREATE USER app IDENTIFIED BY 'secret';");
+            session.execute("CREATE TABLE remote_xa_logs (id INT PRIMARY KEY, note TEXT NOT NULL);");
+            session.execute("GRANT INSERT ON TABLE public.remote_xa_logs TO app;");
+        }
+
+        JavaDbXADataSource dataSource = new JavaDbXADataSource();
+        dataSource.setUser("app");
+        dataSource.setPassword("secret");
+        Xid xid = new TestXid(3, new byte[]{3}, new byte[]{3});
+
+        try (EngineApi.DatabaseEngine engine = EmbeddedDatabaseEngine.open(tempDir);
+             JavaDbServer server = JavaDbServer.start(engine, 0)) {
+            url = "jdbc:javadb:remote://" + InetAddress.getLoopbackAddress().getHostAddress() + ":" + server.port();
+            dataSource.setUrl(url);
 
             XAConnection xaConnection = dataSource.getXAConnection();
             try {
                 XAResource resource = xaConnection.getXAResource();
                 try (Connection connection = xaConnection.getConnection();
                      PreparedStatement insert = connection.prepareStatement("INSERT INTO remote_xa_logs VALUES (?, ?)")) {
-                    Xid xid = new TestXid(3, new byte[]{3}, new byte[]{3});
                     resource.start(xid, XAResource.TMNOFLAGS);
                     insert.setInt(1, 1);
                     insert.setString(2, "remote");
                     insert.executeUpdate();
                     resource.end(xid, XAResource.TMSUCCESS);
-                    resource.commit(xid, true);
+                    assertEquals(XAResource.XA_OK, resource.prepare(xid));
                 }
             } finally {
                 xaConnection.close();
             }
+        }
 
-            xaConnection = dataSource.getXAConnection();
-            try (Connection connection = xaConnection.getConnection();
-                 Statement statement = connection.createStatement();
-                 ResultSet resultSet = statement.executeQuery("SELECT COUNT(*) FROM remote_xa_logs")) {
-                assertTrue(resultSet.next());
-                assertEquals(1L, resultSet.getLong(1));
+        try (EngineApi.DatabaseEngine engine = EmbeddedDatabaseEngine.open(tempDir);
+             JavaDbServer server = JavaDbServer.start(engine, 0)) {
+            dataSource.setUrl("jdbc:javadb:remote://" + InetAddress.getLoopbackAddress().getHostAddress() + ":" + server.port());
+            XAConnection xaConnection = dataSource.getXAConnection();
+            try {
+                XAResource resource = xaConnection.getXAResource();
+                Xid[] recovered = resource.recover(XAResource.TMSTARTRSCAN);
+                assertEquals(1, recovered.length);
+                resource.commit(recovered[0], false);
             } finally {
                 xaConnection.close();
             }
+        }
+
+        try (EngineApi.DatabaseEngine engine = EmbeddedDatabaseEngine.open(tempDir);
+             EngineApi.Session verify = engine.openSession()) {
+            EngineApi.StatementResult result = verify.execute("SELECT COUNT(*) FROM remote_xa_logs").statements().getFirst();
+            assertEquals(1L, result.batch().rows().getFirst().get(0).asLong());
         }
     }
 

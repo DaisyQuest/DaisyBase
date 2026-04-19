@@ -89,6 +89,34 @@ final class JavaDbConnection implements Connection {
         return transport.cancel(executionId);
     }
 
+    void xaPrepare(EngineApi.XidDescriptor xid) throws SQLException {
+        ensureOpen();
+        transport.xaPrepare(xid);
+        transactionActive = false;
+    }
+
+    void xaCommit(EngineApi.XidDescriptor xid, boolean onePhase) throws SQLException {
+        ensureOpen();
+        transport.xaCommit(xid, onePhase);
+        transactionActive = false;
+    }
+
+    void xaRollback(EngineApi.XidDescriptor xid) throws SQLException {
+        ensureOpen();
+        transport.xaRollback(xid);
+        transactionActive = false;
+    }
+
+    List<EngineApi.XidDescriptor> xaRecover() throws SQLException {
+        ensureOpen();
+        return transport.xaRecover();
+    }
+
+    void ensureTransactionStarted() throws SQLException {
+        ensureOpen();
+        beginIfNeeded();
+    }
+
     CachedRowSet metadata(EngineIntrospection.MetadataQuery query, List<String> arguments) throws SQLException {
         ensureOpen();
         return JavaDbResultSets.fromTupleBatch(transport.metadata(query, arguments), 0);

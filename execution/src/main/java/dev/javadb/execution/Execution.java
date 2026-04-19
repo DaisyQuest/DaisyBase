@@ -650,6 +650,42 @@ public final class Execution {
                     }
                     yield Common.Value.text(text.asText().replace(search.asText(), replacement.asText()));
                 }
+                case BLOB_FROM_BASE64 -> {
+                    Common.Value text = arguments.getFirst();
+                    yield text == null || text.isNull()
+                            ? Common.Value.nullValue(type)
+                            : Common.Value.blob(java.util.Base64.getDecoder().decode(text.asText()));
+                }
+                case ARRAY_PARSE -> {
+                    Common.Value text = arguments.getFirst();
+                    yield text == null || text.isNull()
+                            ? Common.Value.nullValue(type)
+                            : new Common.Value(Common.DataType.ARRAY, text.asText());
+                }
+                case STRUCT_PARSE -> {
+                    Common.Value text = arguments.getFirst();
+                    yield text == null || text.isNull()
+                            ? Common.Value.nullValue(type)
+                            : new Common.Value(Common.DataType.STRUCT, text.asText());
+                }
+                case REF_PARSE -> {
+                    Common.Value text = arguments.getFirst();
+                    yield text == null || text.isNull()
+                            ? Common.Value.nullValue(type)
+                            : new Common.Value(Common.DataType.REF, text.asText());
+                }
+                case ROWID_FROM_BASE64 -> {
+                    Common.Value text = arguments.getFirst();
+                    yield text == null || text.isNull()
+                            ? Common.Value.nullValue(type)
+                            : Common.Value.rowIdBytes(java.util.Base64.getDecoder().decode(text.asText()));
+                }
+                case XMLPARSE -> {
+                    Common.Value text = arguments.getFirst();
+                    yield text == null || text.isNull()
+                            ? Common.Value.nullValue(type)
+                            : Common.Value.sqlxml(text.asText());
+                }
             };
         }
 
@@ -744,7 +780,8 @@ public final class Execution {
                 case INTEGER -> Common.Value.integer(left.asInt() + right.asInt());
                 case BIGINT -> Common.Value.bigint(left.asLong() + right.asLong());
                 case DECIMAL -> Common.Value.decimal(left.asDecimal().add(right.asDecimal()));
-                case BOOLEAN, TEXT, DATE, TIME, TIMESTAMP -> throw new Common.DatabaseException(Common.ErrorCode.SEMANTIC_ERROR,
+                case BOOLEAN, TEXT, BLOB, ARRAY, STRUCT, REF, ROWID, SQLXML, DATE, TIME, TIMESTAMP ->
+                        throw new Common.DatabaseException(Common.ErrorCode.SEMANTIC_ERROR,
                         "ADD is only supported on numeric types");
             };
         }
@@ -757,7 +794,8 @@ public final class Execution {
                 case INTEGER -> Common.Value.integer(left.asInt() - right.asInt());
                 case BIGINT -> Common.Value.bigint(left.asLong() - right.asLong());
                 case DECIMAL -> Common.Value.decimal(left.asDecimal().subtract(right.asDecimal()));
-                case BOOLEAN, TEXT, DATE, TIME, TIMESTAMP -> throw new Common.DatabaseException(Common.ErrorCode.SEMANTIC_ERROR,
+                case BOOLEAN, TEXT, BLOB, ARRAY, STRUCT, REF, ROWID, SQLXML, DATE, TIME, TIMESTAMP ->
+                        throw new Common.DatabaseException(Common.ErrorCode.SEMANTIC_ERROR,
                         "SUB is only supported on numeric types");
             };
         }
@@ -770,7 +808,8 @@ public final class Execution {
                 case INTEGER -> Common.Value.integer(left.asInt() * right.asInt());
                 case BIGINT -> Common.Value.bigint(left.asLong() * right.asLong());
                 case DECIMAL -> Common.Value.decimal(left.asDecimal().multiply(right.asDecimal()));
-                case BOOLEAN, TEXT, DATE, TIME, TIMESTAMP -> throw new Common.DatabaseException(Common.ErrorCode.SEMANTIC_ERROR,
+                case BOOLEAN, TEXT, BLOB, ARRAY, STRUCT, REF, ROWID, SQLXML, DATE, TIME, TIMESTAMP ->
+                        throw new Common.DatabaseException(Common.ErrorCode.SEMANTIC_ERROR,
                         "MUL is only supported on numeric types");
             };
         }
@@ -783,7 +822,8 @@ public final class Execution {
                 case INTEGER -> Common.Value.integer(left.asInt() / right.asInt());
                 case BIGINT -> Common.Value.bigint(left.asLong() / right.asLong());
                 case DECIMAL -> Common.Value.decimal(left.asDecimal().divide(right.asDecimal(), MathContext.DECIMAL128));
-                case BOOLEAN, TEXT, DATE, TIME, TIMESTAMP -> throw new Common.DatabaseException(Common.ErrorCode.SEMANTIC_ERROR,
+                case BOOLEAN, TEXT, BLOB, ARRAY, STRUCT, REF, ROWID, SQLXML, DATE, TIME, TIMESTAMP ->
+                        throw new Common.DatabaseException(Common.ErrorCode.SEMANTIC_ERROR,
                         "DIV is only supported on numeric types");
             };
         }

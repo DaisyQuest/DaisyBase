@@ -406,8 +406,8 @@ public final class HeapStorageManager implements AutoCloseable {
             ValueEncoding encoding = ValueEncoding.inline(normalized, inlinePayload(normalized));
             encodings.add(encoding);
             size += 2 + encoding.payload().length;
-            if (!normalized.isNull() && normalized.type() == Common.DataType.TEXT) {
-                textCandidates.add(new TextCandidate(index, normalized.asText().getBytes(StandardCharsets.UTF_8).length));
+            if (!normalized.isNull() && isOverflowCandidate(normalized.type())) {
+                textCandidates.add(new TextCandidate(index, variablePayload(normalized).length));
             }
         }
 
@@ -438,7 +438,7 @@ public final class HeapStorageManager implements AutoCloseable {
 
         for (int index : overflowIndexes) {
             Common.Value value = rowVersion.values().get(index);
-            byte[] bytes = value.asText().getBytes(StandardCharsets.UTF_8);
+            byte[] bytes = variablePayload(value);
             OverflowPointer pointer = allocateOverflow(state, bytes);
             encodings.set(index, ValueEncoding.overflow(value, pointer));
         }
@@ -480,10 +480,9 @@ public final class HeapStorageManager implements AutoCloseable {
                 case INTEGER -> Integer.BYTES;
                 case BIGINT -> Long.BYTES;
                 case BOOLEAN -> 1;
-                case TEXT -> overflowIndexes.contains(index)
+                case TEXT, DECIMAL, TIMESTAMP, ARRAY, STRUCT, REF, SQLXML, BLOB, ROWID -> overflowIndexes.contains(index)
                         ? Integer.BYTES * 2
-                        : Integer.BYTES + normalized.asText().getBytes(StandardCharsets.UTF_8).length;
-                case DECIMAL, TIMESTAMP -> Integer.BYTES + normalized.asText().getBytes(StandardCharsets.UTF_8).length;
+                        : Integer.BYTES + variablePayload(normalized).length;
                 case DATE, TIME -> Long.BYTES;
             };
         }
@@ -498,15 +497,8 @@ public final class HeapStorageManager implements AutoCloseable {
             case INTEGER -> ByteBuffer.allocate(Integer.BYTES).order(ByteOrder.BIG_ENDIAN).putInt(value.asInt()).array();
             case BIGINT -> ByteBuffer.allocate(Long.BYTES).order(ByteOrder.BIG_ENDIAN).putLong(value.asLong()).array();
             case BOOLEAN -> new byte[]{(byte) (value.asBoolean() ? 1 : 0)};
-            case TEXT -> {
-                byte[] bytes = value.asText().getBytes(StandardCharsets.UTF_8);
-                ByteBuffer buffer = ByteBuffer.allocate(Integer.BYTES + bytes.length).order(ByteOrder.BIG_ENDIAN);
-                buffer.putInt(bytes.length);
-                buffer.put(bytes);
-                yield buffer.array();
-            }
-            case DECIMAL, TIMESTAMP -> {
-                byte[] bytes = value.asText().getBytes(StandardCharsets.UTF_8);
+            case TEXT, DECIMAL, TIMESTAMP, ARRAY, STRUCT, REF, SQLXML, BLOB, ROWID -> {
+                byte[] bytes = variablePayload(value);
                 ByteBuffer buffer = ByteBuffer.allocate(Integer.BYTES + bytes.length).order(ByteOrder.BIG_ENDIAN);
                 buffer.putInt(bytes.length);
                 buffer.put(bytes);
@@ -572,36 +564,58 @@ public final class HeapStorageManager implements AutoCloseable {
                 int totalLength = buffer.getInt();
                 int firstPageNumber = buffer.getInt();
                 byte[] bytes = readOverflow(state, firstPageNumber, totalLength);
-                values.add(Common.Value.text(new String(bytes, StandardCharsets.UTF_8)));
+                values.add(decodeVariableValue(type, bytes));
                 continue;
             }
             values.add(switch (type) {
                 case INTEGER -> Common.Value.integer(buffer.getInt());
                 case BIGINT -> Common.Value.bigint(buffer.getLong());
                 case BOOLEAN -> Common.Value.bool(buffer.get() != 0);
-                case TEXT -> {
-                    int textLength = buffer.getInt();
-                    byte[] encoded = new byte[textLength];
+                case TEXT, DECIMAL, TIMESTAMP, ARRAY, STRUCT, REF, SQLXML, BLOB, ROWID -> {
+                    int payloadLength = buffer.getInt();
+                    byte[] encoded = new byte[payloadLength];
                     buffer.get(encoded);
-                    yield Common.Value.text(new String(encoded, StandardCharsets.UTF_8));
-                }
-                case DECIMAL -> {
-                    int decimalLength = buffer.getInt();
-                    byte[] encoded = new byte[decimalLength];
-                    buffer.get(encoded);
-                    yield Common.Value.decimal(new java.math.BigDecimal(new String(encoded, StandardCharsets.UTF_8)));
+                    yield decodeVariableValue(type, encoded);
                 }
                 case DATE -> Common.Value.date(java.time.LocalDate.ofEpochDay(buffer.getLong()));
                 case TIME -> Common.Value.time(java.time.LocalTime.ofNanoOfDay(buffer.getLong()));
-                case TIMESTAMP -> {
-                    int timestampLength = buffer.getInt();
-                    byte[] encoded = new byte[timestampLength];
-                    buffer.get(encoded);
-                    yield Common.Value.timestamp(Common.Value.parseTimestamp(new String(encoded, StandardCharsets.UTF_8)));
-                }
             });
         }
         return new Storage.RowVersion(rowId, createdAt, deletedAt, values);
+    }
+
+    private boolean isOverflowCandidate(Common.DataType type) {
+        return switch (type) {
+            case TEXT, DECIMAL, TIMESTAMP, ARRAY, STRUCT, REF, ROWID, SQLXML, BLOB -> true;
+            case INTEGER, BIGINT, BOOLEAN, DATE, TIME -> false;
+        };
+    }
+
+    private byte[] variablePayload(Common.Value value) {
+        return switch (value.type()) {
+            case TEXT, DECIMAL, TIMESTAMP, ARRAY, STRUCT, REF, SQLXML ->
+                    value.asText().getBytes(StandardCharsets.UTF_8);
+            case BLOB -> value.asBytes();
+            case ROWID -> value.asRowIdBytes();
+            case INTEGER, BIGINT, BOOLEAN, DATE, TIME ->
+                    throw new IllegalStateException("Type " + value.type() + " is not a variable payload");
+        };
+    }
+
+    private Common.Value decodeVariableValue(Common.DataType type, byte[] bytes) {
+        return switch (type) {
+            case TEXT -> Common.Value.text(new String(bytes, StandardCharsets.UTF_8));
+            case DECIMAL -> Common.Value.decimal(new java.math.BigDecimal(new String(bytes, StandardCharsets.UTF_8)));
+            case TIMESTAMP -> Common.Value.timestamp(Common.Value.parseTimestamp(new String(bytes, StandardCharsets.UTF_8)));
+            case ARRAY -> new Common.Value(Common.DataType.ARRAY, new String(bytes, StandardCharsets.UTF_8));
+            case STRUCT -> new Common.Value(Common.DataType.STRUCT, new String(bytes, StandardCharsets.UTF_8));
+            case REF -> new Common.Value(Common.DataType.REF, new String(bytes, StandardCharsets.UTF_8));
+            case SQLXML -> Common.Value.sqlxml(new String(bytes, StandardCharsets.UTF_8));
+            case BLOB -> Common.Value.blob(bytes);
+            case ROWID -> Common.Value.rowIdBytes(bytes);
+            case INTEGER, BIGINT, BOOLEAN, DATE, TIME ->
+                    throw new IllegalStateException("Type " + type + " is not a variable payload");
+        };
     }
 
     private byte[] readOverflow(TableState state, int firstPageNumber, int totalLength) {

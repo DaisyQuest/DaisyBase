@@ -86,4 +86,27 @@ class CatalogSnapshotTest {
         assertNull(users.columns().getFirst().identityDefinition());
         assertEquals("users_pk", snapshot.indexesById().get(new Common.ObjectId(3)).name());
     }
+
+    @Test
+    void persistsUsersRolesAndPrivilegeGrantsAcrossRoundTrip() {
+        Catalog.CatalogSnapshot snapshot = Catalog.bootstrap(new Common.ObjectId(1));
+        snapshot = Catalog.applyChanges(snapshot, List.of(
+                new Catalog.CreateUserChange(new Common.ObjectId(2), "app", Catalog.hashPassword("secret")),
+                new Catalog.CreateRoleChange(new Common.ObjectId(3), "writer"),
+                new Catalog.GrantRoleChange("writer", "app"),
+                new Catalog.GrantPrivilegeChange(Catalog.PrincipalType.ROLE, "writer", Catalog.Privilege.ADMIN, null)
+        ));
+
+        Path snapshotPath = tempDir.resolve("catalog-auth.snapshot");
+        Catalog.writeSnapshot(snapshotPath, snapshot);
+        Catalog.CatalogSnapshot reloaded = Catalog.readSnapshot(snapshotPath);
+
+        assertNotNull(reloaded);
+        assertTrue(reloaded.user("app").isPresent());
+        assertTrue(reloaded.rolesByName().containsKey("writer"));
+        assertTrue(reloaded.roleMemberships().get("app").contains("writer"));
+        assertTrue(reloaded.authenticate("app", "secret"));
+        assertTrue(reloaded.hasPrivilege("app", Catalog.Privilege.ADMIN, null));
+        assertEquals(3L, Catalog.maxObjectId(reloaded));
+    }
 }

@@ -16,6 +16,7 @@ import java.sql.DriverManager;
 import java.sql.ParameterMetaData;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.SQLInvalidAuthorizationSpecException;
 import java.sql.Statement;
 import java.util.Properties;
@@ -95,7 +96,9 @@ class RemoteJdbcDriverTest {
     void remoteDriverSupportsOptionalAuthentication() throws Exception {
         String baseUrl;
         try (EngineApi.DatabaseEngine engine = EmbeddedDatabaseEngine.open(tempDir);
-             JavaDbServer server = JavaDbServer.start(engine, 0, "app", "secret")) {
+             EngineApi.Session session = engine.openSession()) {
+            session.execute("CREATE USER app IDENTIFIED BY 'secret';");
+            try (JavaDbServer server = JavaDbServer.start(engine, 0)) {
             baseUrl = "jdbc:javadb:remote://" + InetAddress.getLoopbackAddress().getHostAddress() + ":" + server.port();
 
             Properties properties = new Properties();
@@ -111,6 +114,42 @@ class RemoteJdbcDriverTest {
             assertInstanceOf(SQLInvalidAuthorizationSpecException.class,
                     assertThrows(SQLInvalidAuthorizationSpecException.class,
                             () -> DriverManager.getConnection(baseUrl, bad)));
+            }
+        }
+    }
+
+    @Test
+    void remoteDriverEnforcesCatalogPrivilegesForAuthenticatedUsers() throws Exception {
+        String url;
+        try (EngineApi.DatabaseEngine engine = EmbeddedDatabaseEngine.open(tempDir);
+             EngineApi.Session session = engine.openSession()) {
+            session.execute("CREATE TABLE docs (id INT PRIMARY KEY, note TEXT NOT NULL);");
+            session.execute("CREATE USER app IDENTIFIED BY 'secret';");
+            session.execute("CREATE ROLE writer;");
+            session.execute("GRANT writer TO app;");
+            session.execute("GRANT SELECT ON TABLE public.docs TO writer;");
+            session.execute("GRANT INSERT ON TABLE public.docs TO writer;");
+
+            try (JavaDbServer server = JavaDbServer.start(engine, 0)) {
+                url = "jdbc:javadb:remote://" + InetAddress.getLoopbackAddress().getHostAddress() + ":" + server.port();
+                Properties properties = new Properties();
+                properties.setProperty("user", "app");
+                properties.setProperty("password", "secret");
+                try (Connection connection = DriverManager.getConnection(url, properties)) {
+                    try (PreparedStatement insert = connection.prepareStatement("INSERT INTO docs VALUES (?, ?)")) {
+                        insert.setInt(1, 1);
+                        insert.setString(2, "allowed");
+                        assertEquals(1, insert.executeUpdate());
+                    }
+                    try (Statement query = connection.createStatement();
+                         ResultSet resultSet = query.executeQuery("SELECT note FROM docs")) {
+                        assertTrue(resultSet.next());
+                        assertEquals("allowed", resultSet.getString(1));
+                    }
+                    assertThrows(SQLException.class,
+                            () -> connection.createStatement().execute("DELETE FROM docs WHERE id = 1"));
+                }
+            }
         }
     }
 

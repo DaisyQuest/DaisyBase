@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -40,6 +41,125 @@ class EngineIntegrationTest {
             assertEquals(1, result.batch().rows().getFirst().get(0).asInt());
             assertEquals("Ada", result.batch().rows().getFirst().get(1).asText());
             assertEquals(37, result.batch().rows().getFirst().get(2).asInt());
+        }
+    }
+
+    @Test
+    void preparedXaBranchesSurviveRestartAndCanBeRecovered() {
+        EngineApi.XidDescriptor xid = new EngineApi.XidDescriptor(42, new byte[]{1, 2}, new byte[]{3, 4});
+        try (EngineApi.DatabaseEngine engine = EmbeddedDatabaseEngine.open(tempDir);
+             EngineApi.Session session = engine.openSession()) {
+            session.execute("CREATE TABLE xa_docs (id INT PRIMARY KEY, note TEXT NOT NULL);");
+            session.transaction().begin(Common.IsolationLevel.READ_COMMITTED);
+            session.execute("INSERT INTO xa_docs VALUES (1, 'prepared');");
+            session.xaPrepare(xid);
+        }
+
+        try (EngineApi.DatabaseEngine engine = EmbeddedDatabaseEngine.open(tempDir);
+             EngineApi.Session recovery = engine.openSession()) {
+            assertEquals(List.of(xid), recovery.xaRecover());
+            recovery.xaCommit(xid, false);
+        }
+
+        try (EngineApi.DatabaseEngine engine = EmbeddedDatabaseEngine.open(tempDir);
+             EngineApi.Session verify = engine.openSession()) {
+            EngineApi.StatementResult result = verify.execute("SELECT note FROM xa_docs").statements().getFirst();
+            assertEquals(1, result.batch().rows().size());
+            assertEquals("prepared", result.batch().rows().getFirst().get(0).asText());
+        }
+    }
+
+    @Test
+    void catalogUsersRolesAndPrivilegesAuthorizeSessions() {
+        try (EngineApi.DatabaseEngine engine = EmbeddedDatabaseEngine.open(tempDir);
+             EngineApi.Session system = engine.openSession()) {
+            system.execute("CREATE TABLE docs (id INT PRIMARY KEY, note TEXT NOT NULL);");
+            system.execute("CREATE USER app IDENTIFIED BY 'secret';");
+            system.execute("CREATE ROLE writer;");
+            system.execute("GRANT writer TO app;");
+            system.execute("GRANT SELECT ON TABLE public.docs TO writer;");
+            system.execute("GRANT INSERT ON TABLE public.docs TO writer;");
+
+            try (EngineApi.Session app = engine.openSession("app")) {
+                app.execute("INSERT INTO docs VALUES (1, 'allowed');");
+                EngineApi.StatementResult select = app.execute("SELECT note FROM docs").statements().getFirst();
+                assertEquals("allowed", select.batch().rows().getFirst().get(0).asText());
+                assertThrows(Common.DatabaseException.class,
+                        () -> app.execute("DELETE FROM docs WHERE id = 1;"));
+            }
+        }
+    }
+
+    @Test
+    void xaRollbackAndOnePhaseCommitCoverActiveTransactionBranches() {
+        EngineApi.XidDescriptor rollbackXid = new EngineApi.XidDescriptor(51, new byte[]{1}, new byte[]{2});
+        EngineApi.XidDescriptor commitXid = new EngineApi.XidDescriptor(52, new byte[]{3}, new byte[]{4});
+        try (EngineApi.DatabaseEngine engine = EmbeddedDatabaseEngine.open(tempDir);
+             EngineApi.Session session = engine.openSession()) {
+            session.execute("CREATE TABLE xa_active (id INT PRIMARY KEY, note TEXT NOT NULL);");
+
+            session.transaction().begin(Common.IsolationLevel.READ_COMMITTED);
+            session.execute("INSERT INTO xa_active VALUES (1, 'rolled back');");
+            session.xaRollback(rollbackXid);
+
+            EngineApi.StatementResult afterRollback = session.execute(
+                    "SELECT COUNT(*) AS total FROM xa_active;").statements().getFirst();
+            assertEquals(0L, afterRollback.batch().rows().getFirst().get(0).asLong());
+
+            session.transaction().begin(Common.IsolationLevel.READ_COMMITTED);
+            session.execute("INSERT INTO xa_active VALUES (2, 'committed');");
+            session.xaCommit(commitXid, true);
+
+            EngineApi.StatementResult afterCommit = session.execute(
+                    "SELECT id, note FROM xa_active ORDER BY id;").statements().getFirst();
+            assertEquals(1, afterCommit.batch().rows().size());
+            assertEquals(2, afterCommit.batch().rows().getFirst().get(0).asInt());
+            assertEquals("committed", afterCommit.batch().rows().getFirst().get(1).asText());
+            assertTrue(session.xaRecover().isEmpty());
+        }
+    }
+
+    @Test
+    void authorizationRequiresRoutineExecuteAndAdminPrivileges() {
+        try (EngineApi.DatabaseEngine engine = EmbeddedDatabaseEngine.open(tempDir);
+             EngineApi.Session system = engine.openSession()) {
+            system.execute("CREATE USER app IDENTIFIED BY 'secret';");
+            system.execute("CREATE ROLE executor_role;");
+            system.execute("CREATE ROLE admin_role;");
+            system.execute("""
+                    CREATE FUNCTION public.echo_text(p_text TEXT) RETURN TEXT IS
+                    BEGIN
+                      RETURN p_text;
+                    END;
+                    """);
+            system.execute("""
+                    CREATE FUNCTION public.secret_text() RETURN TEXT IS
+                    BEGIN
+                      RETURN 'secret';
+                    END;
+                    """);
+            system.execute("GRANT executor_role TO app;");
+            system.execute("GRANT EXECUTE ON FUNCTION public.echo_text TO executor_role;");
+
+            try (EngineApi.Session app = engine.openSession("app")) {
+                EngineApi.StatementResult allowed = app.execute(
+                        "CALL public.echo_text('ok');").statements().getFirst();
+                assertEquals("ok", allowed.batch().rows().getFirst().get(0).asText());
+
+                assertThrows(Common.DatabaseException.class,
+                        () -> app.execute("CALL public.secret_text();"));
+                assertThrows(Common.DatabaseException.class,
+                        () -> app.execute("CREATE TABLE blocked (id INT PRIMARY KEY);"));
+                assertThrows(Common.DatabaseException.class,
+                        () -> app.execute("CREATE USER blocked IDENTIFIED BY 'blocked';"));
+            }
+
+            system.execute("GRANT ADMIN TO admin_role;");
+            system.execute("GRANT admin_role TO app;");
+
+            try (EngineApi.Session admin = engine.openSession("app")) {
+                admin.execute("CREATE SEQUENCE public.app_seq START WITH 1 INCREMENT BY 1;");
+            }
         }
     }
 

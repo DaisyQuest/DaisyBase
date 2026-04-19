@@ -25,6 +25,12 @@ public final class Common {
         BIGINT,
         BOOLEAN,
         TEXT,
+        BLOB,
+        ARRAY,
+        STRUCT,
+        REF,
+        ROWID,
+        SQLXML,
         DECIMAL,
         DATE,
         TIME,
@@ -36,6 +42,12 @@ public final class Common {
                 case "BIGINT", "NUMBER" -> BIGINT;
                 case "BOOL", "BOOLEAN" -> BOOLEAN;
                 case "TEXT", "STRING", "VARCHAR", "VARCHAR2", "CHAR", "CLOB" -> TEXT;
+                case "BLOB", "BINARY", "VARBINARY" -> BLOB;
+                case "ARRAY" -> ARRAY;
+                case "STRUCT", "OBJECT" -> STRUCT;
+                case "REF" -> REF;
+                case "ROWID" -> ROWID;
+                case "SQLXML", "XML" -> SQLXML;
                 case "NUMERIC", "DECIMAL" -> DECIMAL;
                 case "DATE" -> DATE;
                 case "TIME" -> TIME;
@@ -54,6 +66,10 @@ public final class Common {
                 case BIGINT -> 19;
                 case BOOLEAN -> 1;
                 case TEXT -> 32_767;
+                case BLOB -> 1_048_576;
+                case ARRAY, STRUCT, REF -> 32_767;
+                case ROWID -> 256;
+                case SQLXML -> 1_048_576;
                 case DECIMAL -> 38;
                 case DATE -> 10;
                 case TIME -> 12;
@@ -216,6 +232,35 @@ public final class Common {
         private static final long serialVersionUID = 1L;
     }
 
+    public record ArrayValue(String baseTypeName, List<Value> elements) implements Serializable {
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        public ArrayValue {
+            baseTypeName = baseTypeName == null ? "TEXT" : baseTypeName;
+            elements = elements == null ? List.of() : List.copyOf(elements);
+        }
+    }
+
+    public record StructValue(String sqlTypeName, List<Value> attributes) implements Serializable {
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        public StructValue {
+            sqlTypeName = sqlTypeName == null ? "STRUCT" : sqlTypeName;
+            attributes = attributes == null ? List.of() : List.copyOf(attributes);
+        }
+    }
+
+    public record RefValue(String baseTypeName, Value referencedValue) implements Serializable {
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        public RefValue {
+            baseTypeName = baseTypeName == null ? "REF" : baseTypeName;
+        }
+    }
+
     public record Value(DataType type, Object raw) implements Comparable<Value>, Serializable {
         @Serial
         private static final long serialVersionUID = 1L;
@@ -228,6 +273,18 @@ public final class Common {
                     case BIGINT -> raw = ((Number) raw).longValue();
                     case BOOLEAN -> raw = (Boolean) raw;
                     case TEXT -> raw = raw.toString();
+                    case BLOB -> raw = normalizeBinary(raw);
+                    case ARRAY -> raw = raw instanceof ArrayValue arrayValue
+                            ? arrayValue
+                            : coerceArrayValue(raw);
+                    case STRUCT -> raw = raw instanceof StructValue structValue
+                            ? structValue
+                            : coerceStructValue(raw);
+                    case REF -> raw = raw instanceof RefValue refValue
+                            ? refValue
+                            : coerceRefValue(raw);
+                    case ROWID -> raw = normalizeBinary(raw);
+                    case SQLXML -> raw = raw.toString();
                     case DECIMAL -> raw = raw instanceof BigDecimal bigDecimal
                             ? bigDecimal
                             : new BigDecimal(raw.toString());
@@ -258,6 +315,30 @@ public final class Common {
 
         public static Value text(String value) {
             return new Value(DataType.TEXT, value);
+        }
+
+        public static Value blob(byte[] value) {
+            return new Value(DataType.BLOB, value);
+        }
+
+        public static Value array(ArrayValue value) {
+            return new Value(DataType.ARRAY, value);
+        }
+
+        public static Value struct(StructValue value) {
+            return new Value(DataType.STRUCT, value);
+        }
+
+        public static Value ref(RefValue value) {
+            return new Value(DataType.REF, value);
+        }
+
+        public static Value rowIdBytes(byte[] value) {
+            return new Value(DataType.ROWID, value);
+        }
+
+        public static Value sqlxml(String value) {
+            return new Value(DataType.SQLXML, value);
         }
 
         public static Value decimal(BigDecimal value) {
@@ -293,6 +374,9 @@ public final class Common {
             if (literal instanceof BigDecimal decimalValue) {
                 return decimal(decimalValue);
             }
+            if (literal instanceof byte[] bytes) {
+                return blob(bytes);
+            }
             if (literal instanceof Boolean boolValue) {
                 return bool(boolValue);
             }
@@ -327,6 +411,12 @@ public final class Common {
         public String asText() {
             return raw == null ? null : switch (type) {
                 case INTEGER, BIGINT, BOOLEAN, TEXT -> raw.toString();
+                case BLOB -> Base64.getEncoder().encodeToString(asBytes());
+                case ARRAY -> serializeArray(asArray());
+                case STRUCT -> serializeStruct(asStruct());
+                case REF -> serializeRef(asRef());
+                case ROWID -> Base64.getEncoder().encodeToString(asRowIdBytes());
+                case SQLXML -> asSqlXml();
                 case DECIMAL -> asDecimal().stripTrailingZeros().toPlainString();
                 case DATE -> asDate().toString();
                 case TIME -> asTime().toString();
@@ -339,7 +429,8 @@ public final class Common {
                 case INTEGER -> BigDecimal.valueOf(asInt());
                 case BIGINT -> BigDecimal.valueOf(asLong());
                 case DECIMAL -> (BigDecimal) raw;
-                case BOOLEAN, TEXT, DATE, TIME, TIMESTAMP -> new BigDecimal(asText());
+                case BOOLEAN, TEXT, SQLXML, DATE, TIME, TIMESTAMP -> new BigDecimal(asText());
+                case BLOB, ARRAY, STRUCT, REF, ROWID -> throw new IllegalStateException("Cannot coerce " + type + " to DECIMAL");
             };
         }
 
@@ -348,7 +439,8 @@ public final class Common {
                 case DATE -> (LocalDate) raw;
                 case TEXT -> LocalDate.parse(asText());
                 case TIMESTAMP -> asTimestamp().toLocalDate();
-                case INTEGER, BIGINT, BOOLEAN, DECIMAL, TIME -> throw new IllegalStateException("Cannot coerce " + type + " to DATE");
+                case INTEGER, BIGINT, BOOLEAN, BLOB, ARRAY, STRUCT, REF, ROWID, SQLXML, DECIMAL, TIME ->
+                        throw new IllegalStateException("Cannot coerce " + type + " to DATE");
             };
         }
 
@@ -357,7 +449,8 @@ public final class Common {
                 case TIME -> (LocalTime) raw;
                 case TEXT -> LocalTime.parse(asText());
                 case TIMESTAMP -> asTimestamp().toLocalTime();
-                case INTEGER, BIGINT, BOOLEAN, DECIMAL, DATE -> throw new IllegalStateException("Cannot coerce " + type + " to TIME");
+                case INTEGER, BIGINT, BOOLEAN, BLOB, ARRAY, STRUCT, REF, ROWID, SQLXML, DECIMAL, DATE ->
+                        throw new IllegalStateException("Cannot coerce " + type + " to TIME");
             };
         }
 
@@ -366,8 +459,51 @@ public final class Common {
                 case TIMESTAMP -> (LocalDateTime) raw;
                 case DATE -> asDate().atStartOfDay();
                 case TEXT -> parseTimestamp(asText());
-                case INTEGER, BIGINT, BOOLEAN, DECIMAL, TIME -> throw new IllegalStateException("Cannot coerce " + type + " to TIMESTAMP");
+                case INTEGER, BIGINT, BOOLEAN, BLOB, ARRAY, STRUCT, REF, ROWID, SQLXML, DECIMAL, TIME ->
+                        throw new IllegalStateException("Cannot coerce " + type + " to TIMESTAMP");
             };
+        }
+
+        public byte[] asBytes() {
+            if (type != DataType.BLOB) {
+                throw new IllegalStateException("Cannot coerce " + type + " to BLOB");
+            }
+            return ((byte[]) raw).clone();
+        }
+
+        public ArrayValue asArray() {
+            if (type != DataType.ARRAY) {
+                throw new IllegalStateException("Cannot coerce " + type + " to ARRAY");
+            }
+            return (ArrayValue) raw;
+        }
+
+        public StructValue asStruct() {
+            if (type != DataType.STRUCT) {
+                throw new IllegalStateException("Cannot coerce " + type + " to STRUCT");
+            }
+            return (StructValue) raw;
+        }
+
+        public RefValue asRef() {
+            if (type != DataType.REF) {
+                throw new IllegalStateException("Cannot coerce " + type + " to REF");
+            }
+            return (RefValue) raw;
+        }
+
+        public byte[] asRowIdBytes() {
+            if (type != DataType.ROWID) {
+                throw new IllegalStateException("Cannot coerce " + type + " to ROWID");
+            }
+            return ((byte[]) raw).clone();
+        }
+
+        public String asSqlXml() {
+            if (type != DataType.SQLXML) {
+                throw new IllegalStateException("Cannot coerce " + type + " to SQLXML");
+            }
+            return (String) raw;
         }
 
         public Value castTo(DataType targetType) {
@@ -382,16 +518,44 @@ public final class Common {
                     case INTEGER -> asInt();
                     case BIGINT -> Math.toIntExact(asLong());
                     case DECIMAL -> asDecimal().intValueExact();
-                    case BOOLEAN, TEXT, DATE, TIME, TIMESTAMP -> Integer.parseInt(asText());
+                    case BOOLEAN, TEXT, DATE, TIME, TIMESTAMP, SQLXML -> Integer.parseInt(asText());
+                    case BLOB, ARRAY, STRUCT, REF, ROWID -> throw new IllegalStateException("Cannot coerce " + type + " to INTEGER");
                 });
                 case BIGINT -> new Value(targetType, switch (type) {
                     case INTEGER -> (long) asInt();
                     case BIGINT -> asLong();
                     case DECIMAL -> asDecimal().longValueExact();
-                    case BOOLEAN, TEXT, DATE, TIME, TIMESTAMP -> Long.parseLong(asText());
+                    case BOOLEAN, TEXT, DATE, TIME, TIMESTAMP, SQLXML -> Long.parseLong(asText());
+                    case BLOB, ARRAY, STRUCT, REF, ROWID -> throw new IllegalStateException("Cannot coerce " + type + " to BIGINT");
                 });
                 case BOOLEAN -> new Value(targetType, Boolean.parseBoolean(asText()));
                 case TEXT -> new Value(targetType, asText());
+                case BLOB -> switch (type) {
+                    case BLOB -> this;
+                    case TEXT -> new Value(targetType, Base64.getDecoder().decode(asText()));
+                    default -> throw new IllegalStateException("Cannot coerce " + type + " to BLOB");
+                };
+                case ARRAY -> switch (type) {
+                    case ARRAY -> this;
+                    case TEXT -> new Value(targetType, deserializeArray(asText()));
+                    default -> throw new IllegalStateException("Cannot coerce " + type + " to ARRAY");
+                };
+                case STRUCT -> switch (type) {
+                    case STRUCT -> this;
+                    case TEXT -> new Value(targetType, deserializeStruct(asText()));
+                    default -> throw new IllegalStateException("Cannot coerce " + type + " to STRUCT");
+                };
+                case REF -> switch (type) {
+                    case REF -> this;
+                    case TEXT -> new Value(targetType, deserializeRef(asText()));
+                    default -> throw new IllegalStateException("Cannot coerce " + type + " to REF");
+                };
+                case ROWID -> switch (type) {
+                    case ROWID -> this;
+                    case TEXT -> new Value(targetType, Base64.getDecoder().decode(asText()));
+                    default -> throw new IllegalStateException("Cannot coerce " + type + " to ROWID");
+                };
+                case SQLXML -> new Value(targetType, asText());
                 case DECIMAL -> new Value(targetType, asDecimal());
                 case DATE -> new Value(targetType, asDate());
                 case TIME -> new Value(targetType, asTime());
@@ -418,6 +582,12 @@ public final class Common {
                 case BIGINT -> Long.compare(asLong(), other.asLong());
                 case BOOLEAN -> Boolean.compare(asBoolean(), other.asBoolean());
                 case TEXT -> asText().compareTo(other.asText());
+                case BLOB -> compareBytes(asBytes(), other.asBytes());
+                case ARRAY -> serializeArray(asArray()).compareTo(serializeArray(other.asArray()));
+                case STRUCT -> serializeStruct(asStruct()).compareTo(serializeStruct(other.asStruct()));
+                case REF -> serializeRef(asRef()).compareTo(serializeRef(other.asRef()));
+                case ROWID -> compareBytes(asRowIdBytes(), other.asRowIdBytes());
+                case SQLXML -> asSqlXml().compareTo(other.asSqlXml());
                 case DECIMAL -> asDecimal().compareTo(other.asDecimal());
                 case DATE -> asDate().compareTo(other.asDate());
                 case TIME -> asTime().compareTo(other.asTime());
@@ -429,6 +599,118 @@ public final class Common {
             return text.contains("T")
                     ? LocalDateTime.parse(text)
                     : LocalDateTime.parse(text.replace(' ', 'T'));
+        }
+
+        private static byte[] normalizeBinary(Object raw) {
+            if (raw instanceof byte[] bytes) {
+                return bytes.clone();
+            }
+            if (raw instanceof String text) {
+                return Base64.getDecoder().decode(text);
+            }
+            throw new IllegalArgumentException("Unsupported binary payload type: " + raw.getClass().getName());
+        }
+
+        private static ArrayValue coerceArrayValue(Object raw) {
+            if (raw instanceof List<?> list) {
+                return new ArrayValue("TEXT", list.stream().map(Value::fromLiteral).toList());
+            }
+            if (raw instanceof Object[] array) {
+                List<Value> elements = new ArrayList<>(array.length);
+                for (Object element : array) {
+                    elements.add(Value.fromLiteral(element));
+                }
+                return new ArrayValue("TEXT", elements);
+            }
+            if (raw instanceof String text) {
+                return deserializeArray(text);
+            }
+            throw new IllegalArgumentException("Unsupported ARRAY payload type: " + raw.getClass().getName());
+        }
+
+        private static StructValue coerceStructValue(Object raw) {
+            if (raw instanceof List<?> list) {
+                return new StructValue("STRUCT", list.stream().map(Value::fromLiteral).toList());
+            }
+            if (raw instanceof Object[] array) {
+                List<Value> attributes = new ArrayList<>(array.length);
+                for (Object attribute : array) {
+                    attributes.add(Value.fromLiteral(attribute));
+                }
+                return new StructValue("STRUCT", attributes);
+            }
+            if (raw instanceof String text) {
+                return deserializeStruct(text);
+            }
+            throw new IllegalArgumentException("Unsupported STRUCT payload type: " + raw.getClass().getName());
+        }
+
+        private static RefValue coerceRefValue(Object raw) {
+            if (raw instanceof String text) {
+                return deserializeRef(text);
+            }
+            if (raw instanceof Value value) {
+                return new RefValue("REF", value);
+            }
+            return new RefValue("REF", Value.fromLiteral(raw));
+        }
+
+        private static int compareBytes(byte[] left, byte[] right) {
+            int min = Math.min(left.length, right.length);
+            for (int index = 0; index < min; index++) {
+                int compare = Byte.compare(left[index], right[index]);
+                if (compare != 0) {
+                    return compare;
+                }
+            }
+            return Integer.compare(left.length, right.length);
+        }
+
+        private static String serializeArray(ArrayValue arrayValue) {
+            List<String> parts = new ArrayList<>();
+            parts.add(Values.encodeString(arrayValue.baseTypeName()));
+            parts.add(Integer.toString(arrayValue.elements().size()));
+            arrayValue.elements().forEach(value -> parts.add(Values.encodeString(Values.encodeValue(value))));
+            return String.join("|", parts);
+        }
+
+        private static ArrayValue deserializeArray(String text) {
+            String[] parts = text.split("\\|", -1);
+            String baseTypeName = Values.decodeString(parts[0]);
+            int count = Integer.parseInt(parts[1]);
+            List<Value> elements = new ArrayList<>(count);
+            for (int index = 0; index < count; index++) {
+                elements.add(Values.decodeValue(Values.decodeString(parts[index + 2])));
+            }
+            return new ArrayValue(baseTypeName, elements);
+        }
+
+        private static String serializeStruct(StructValue structValue) {
+            List<String> parts = new ArrayList<>();
+            parts.add(Values.encodeString(structValue.sqlTypeName()));
+            parts.add(Integer.toString(structValue.attributes().size()));
+            structValue.attributes().forEach(value -> parts.add(Values.encodeString(Values.encodeValue(value))));
+            return String.join("|", parts);
+        }
+
+        private static StructValue deserializeStruct(String text) {
+            String[] parts = text.split("\\|", -1);
+            String typeName = Values.decodeString(parts[0]);
+            int count = Integer.parseInt(parts[1]);
+            List<Value> attributes = new ArrayList<>(count);
+            for (int index = 0; index < count; index++) {
+                attributes.add(Values.decodeValue(Values.decodeString(parts[index + 2])));
+            }
+            return new StructValue(typeName, attributes);
+        }
+
+        private static String serializeRef(RefValue refValue) {
+            return Values.encodeString(refValue.baseTypeName()) + "|" + Values.encodeString(Values.encodeValue(refValue.referencedValue()));
+        }
+
+        private static RefValue deserializeRef(String text) {
+            String[] parts = text.split("\\|", 2);
+            return new RefValue(Values.decodeString(parts[0]), Values.decodeValue(Values.decodeString(parts[1])));
         }
     }
 
@@ -546,6 +828,12 @@ public final class Common {
                 case BIGINT -> Value.bigint(((Number) value).longValue());
                 case BOOLEAN -> Value.bool((Boolean) value);
                 case TEXT -> Value.text(value.toString());
+                case BLOB -> Value.blob((byte[]) value);
+                case ARRAY -> Value.array((ArrayValue) value);
+                case STRUCT -> Value.struct((StructValue) value);
+                case REF -> Value.ref((RefValue) value);
+                case ROWID -> Value.rowIdBytes((byte[]) value);
+                case SQLXML -> Value.sqlxml(value.toString());
                 case DECIMAL -> Value.decimal(value instanceof BigDecimal bigDecimal ? bigDecimal : new BigDecimal(value.toString()));
                 case DATE -> Value.date(value instanceof LocalDate localDate ? localDate : LocalDate.parse(value.toString()));
                 case TIME -> Value.time(value instanceof LocalTime localTime ? localTime : LocalTime.parse(value.toString()));
@@ -556,7 +844,17 @@ public final class Common {
         }
 
         public static String encodeValue(Value value) {
-            String payload = value == null || value.raw() == null ? "" : Base64.getUrlEncoder().encodeToString(value.asText().getBytes(StandardCharsets.UTF_8));
+            String payload = value == null || value.raw() == null
+                    ? ""
+                    : Base64.getUrlEncoder().encodeToString(switch (value.type()) {
+                        case INTEGER, BIGINT, BOOLEAN, TEXT, SQLXML, DECIMAL, DATE, TIME, TIMESTAMP ->
+                                value.asText().getBytes(StandardCharsets.UTF_8);
+                        case BLOB -> value.asBytes();
+                        case ARRAY -> value.asText().getBytes(StandardCharsets.UTF_8);
+                        case STRUCT -> value.asText().getBytes(StandardCharsets.UTF_8);
+                        case REF -> value.asText().getBytes(StandardCharsets.UTF_8);
+                        case ROWID -> value.asRowIdBytes();
+                    });
             String type = value == null ? DataType.TEXT.name() : value.type().name();
             boolean isNull = value == null || value.raw() == null;
             return type + ":" + isNull + ":" + payload;
@@ -575,6 +873,12 @@ public final class Common {
                 case BIGINT -> Value.bigint(Long.parseLong(payload));
                 case BOOLEAN -> Value.bool(Boolean.parseBoolean(payload));
                 case TEXT -> Value.text(payload);
+                case BLOB -> Value.blob(Base64.getUrlDecoder().decode(parts[2]));
+                case ARRAY -> Value.array(Value.deserializeArray(payload));
+                case STRUCT -> Value.struct(Value.deserializeStruct(payload));
+                case REF -> Value.ref(Value.deserializeRef(payload));
+                case ROWID -> Value.rowIdBytes(Base64.getUrlDecoder().decode(parts[2]));
+                case SQLXML -> Value.sqlxml(payload);
                 case DECIMAL -> Value.decimal(new BigDecimal(payload));
                 case DATE -> Value.date(LocalDate.parse(payload));
                 case TIME -> Value.time(LocalTime.parse(payload));

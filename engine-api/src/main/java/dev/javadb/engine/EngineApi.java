@@ -3,6 +3,7 @@ package dev.javadb.engine;
 import dev.javadb.common.Common;
 
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
@@ -22,6 +23,9 @@ public final class EngineApi {
 
     public interface DatabaseEngine extends AutoCloseable {
         Session openSession();
+        default Session openSession(String principal) {
+            return openSession();
+        }
         void checkpoint();
         @Override
         void close();
@@ -33,9 +37,36 @@ public final class EngineApi {
         PreparedStatementDescription prepare(String sql);
         BatchResult executePrepared(long statementId, List<String> parameterLiterals, Common.ExecutionControl executionControl);
         void closePrepared(long statementId);
+        void xaPrepare(XidDescriptor xid);
+        void xaCommit(XidDescriptor xid, boolean onePhase);
+        void xaRollback(XidDescriptor xid);
+        List<XidDescriptor> xaRecover();
         TransactionHandle transaction();
         @Override
         void close();
+    }
+
+    public record XidDescriptor(int formatId, byte[] globalId, byte[] branchId) implements java.io.Serializable {
+        @java.io.Serial
+        private static final long serialVersionUID = 1L;
+
+        public XidDescriptor {
+            globalId = globalId == null ? new byte[0] : globalId.clone();
+            branchId = branchId == null ? new byte[0] : branchId.clone();
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            return obj instanceof XidDescriptor other
+                    && formatId == other.formatId
+                    && Arrays.equals(globalId, other.globalId)
+                    && Arrays.equals(branchId, other.branchId);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(formatId, Arrays.hashCode(globalId), Arrays.hashCode(branchId));
+        }
     }
 
     public record ParameterDescription(int index, Common.DataType type, Integer precision, Integer scale, boolean nullable) {

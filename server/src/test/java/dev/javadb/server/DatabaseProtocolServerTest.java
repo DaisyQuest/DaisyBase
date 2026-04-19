@@ -107,13 +107,16 @@ class DatabaseProtocolServerTest {
     @Test
     void handshakeRejectsInvalidCredentials() throws Exception {
         try (EngineApi.DatabaseEngine engine = EmbeddedDatabaseEngine.open(tempDir);
-             DatabaseProtocolServer server = DatabaseProtocolServer.start(engine, 0, "app", "secret");
+             EngineApi.Session session = engine.openSession()) {
+            session.execute("CREATE USER app IDENTIFIED BY 'secret';");
+            try (DatabaseProtocolServer server = DatabaseProtocolServer.start(engine, 0);
              ProtocolClient client = ProtocolClient.connect(server.port())) {
-            client.send(new RemoteProtocol.ClientHello("junit", RemoteProtocol.VERSION, "app", "wrong"));
+                client.send(new RemoteProtocol.ClientHello("junit", RemoteProtocol.VERSION, "app", "wrong"));
 
-            RemoteProtocol.Failure failure = assertInstanceOf(RemoteProtocol.Failure.class, client.receive());
-            assertEquals("AUTHENTICATION_FAILED", failure.code());
-            assertTrue(failure.fatal());
+                RemoteProtocol.Failure failure = assertInstanceOf(RemoteProtocol.Failure.class, client.receive());
+                assertEquals("AUTHENTICATION_FAILED", failure.code());
+                assertTrue(failure.fatal());
+            }
         }
     }
 

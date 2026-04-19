@@ -232,6 +232,41 @@ class SqlFrontendTest {
     }
 
     @Test
+    void parsesCatalogBackedAuthStatements() {
+        SqlFrontend.StatementBatch batch = SqlFrontend.parseBatch("""
+                CREATE USER app IDENTIFIED BY 'secret';
+                CREATE ROLE writer;
+                GRANT ADMIN TO writer;
+                GRANT writer TO app;
+                GRANT SELECT ON TABLE public.docs TO writer;
+                GRANT EXECUTE ON FUNCTION public.echo_text TO writer;
+                """);
+
+        SqlFrontend.CreateUserStatement createUser = assertInstanceOf(SqlFrontend.CreateUserStatement.class, batch.statements().get(0));
+        assertEquals("app", createUser.userName());
+        assertEquals("secret", createUser.password());
+
+        SqlFrontend.CreateRoleStatement createRole = assertInstanceOf(SqlFrontend.CreateRoleStatement.class, batch.statements().get(1));
+        assertEquals("writer", createRole.roleName());
+
+        SqlFrontend.GrantPrivilegeStatement adminGrant = assertInstanceOf(SqlFrontend.GrantPrivilegeStatement.class, batch.statements().get(2));
+        assertEquals("ADMIN", adminGrant.privileges().getFirst());
+        assertEquals(null, adminGrant.objectType());
+
+        SqlFrontend.GrantRoleStatement roleGrant = assertInstanceOf(SqlFrontend.GrantRoleStatement.class, batch.statements().get(3));
+        assertEquals("writer", roleGrant.roleName());
+        assertEquals("app", roleGrant.userName());
+
+        SqlFrontend.GrantPrivilegeStatement tableGrant = assertInstanceOf(SqlFrontend.GrantPrivilegeStatement.class, batch.statements().get(4));
+        assertEquals(SqlFrontend.GrantObjectType.TABLE, tableGrant.objectType());
+        assertEquals("docs", tableGrant.objectName().name());
+
+        SqlFrontend.GrantPrivilegeStatement routineGrant = assertInstanceOf(SqlFrontend.GrantPrivilegeStatement.class, batch.statements().get(5));
+        assertEquals(SqlFrontend.GrantObjectType.ROUTINE, routineGrant.objectType());
+        assertEquals("echo_text", routineGrant.objectName().name());
+    }
+
+    @Test
     void preservesDeclaredDecimalPrecisionAndScaleAcrossTablesAndRoutines() {
         SqlFrontend.StatementBatch batch = SqlFrontend.parseBatch("""
                 CREATE TABLE ledger (

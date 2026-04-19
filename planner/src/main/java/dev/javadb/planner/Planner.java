@@ -65,7 +65,13 @@ public final class Planner {
         COALESCE,
         TRIM,
         SUBSTR,
-        REPLACE
+        REPLACE,
+        BLOB_FROM_BASE64,
+        ARRAY_PARSE,
+        STRUCT_PARSE,
+        REF_PARSE,
+        ROWID_FROM_BASE64,
+        XMLPARSE
     }
 
     public record BoundScalarFunction(ScalarFunction function, List<BoundExpression> arguments, Common.DataType type,
@@ -218,6 +224,10 @@ public final class Planner {
                 case SqlFrontend.CreateIndexStatement createIndex -> bindCreateIndex(createIndex);
                 case SqlFrontend.CreateSequenceStatement createSequence -> bindCreateSequence(createSequence);
                 case SqlFrontend.CreateRoutineStatement createRoutine -> bindCreateRoutine(createRoutine);
+                case SqlFrontend.CreateUserStatement createUser -> bindCreateUser(createUser);
+                case SqlFrontend.CreateRoleStatement createRole -> bindCreateRole(createRole);
+                case SqlFrontend.GrantRoleStatement grantRole -> bindGrantRole(grantRole);
+                case SqlFrontend.GrantPrivilegeStatement grantPrivilege -> bindGrantPrivilege(grantPrivilege);
                 case SqlFrontend.InsertStatement insert -> bindInsert(insert);
                 case SqlFrontend.SelectStatement select -> bindSelect(select);
                 case SqlFrontend.UpdateStatement update -> bindUpdate(update);
@@ -298,6 +308,63 @@ public final class Planner {
                     normalizePrecision(returnType, statement.returnTypePrecision(), statement.returnTypeScale(), statement.span()),
                     normalizeScale(returnType, statement.returnTypePrecision(), statement.returnTypeScale(), statement.span()),
                     statement.bodySql()), statement.span());
+        }
+
+        private BoundCatalogStatement bindCreateUser(SqlFrontend.CreateUserStatement statement) {
+            return new BoundCatalogStatement(new Catalog.CreateUserChange(
+                    new Common.ObjectId(nextObjectId.getAsLong()),
+                    statement.userName().toLowerCase(Locale.ROOT),
+                    Catalog.hashPassword(statement.password())), statement.span());
+        }
+
+        private BoundCatalogStatement bindCreateRole(SqlFrontend.CreateRoleStatement statement) {
+            return new BoundCatalogStatement(new Catalog.CreateRoleChange(
+                    new Common.ObjectId(nextObjectId.getAsLong()),
+                    statement.roleName().toLowerCase(Locale.ROOT)), statement.span());
+        }
+
+        private BoundCatalogStatement bindGrantRole(SqlFrontend.GrantRoleStatement statement) {
+            return new BoundCatalogStatement(new Catalog.GrantRoleChange(
+                    statement.roleName().toLowerCase(Locale.ROOT),
+                    statement.userName().toLowerCase(Locale.ROOT)), statement.span());
+        }
+
+        private BoundCatalogStatement bindGrantPrivilege(SqlFrontend.GrantPrivilegeStatement statement) {
+            Catalog.PrincipalType principalType = resolvePrincipalType(statement.grantee(), statement.span());
+            Common.ObjectId objectId = null;
+            if (statement.objectType() != null && statement.objectName() != null) {
+                objectId = switch (statement.objectType()) {
+                    case TABLE -> catalogSnapshot.requireTable(Catalog.QualifiedName.from(statement.objectName())).id();
+                    case ROUTINE -> catalogSnapshot.routine(Catalog.QualifiedName.from(statement.objectName()))
+                            .orElseThrow(() -> new Common.DatabaseException(Common.ErrorCode.SEMANTIC_ERROR,
+                                    "Unknown routine " + Catalog.QualifiedName.from(statement.objectName()).toSql(), statement.span()))
+                            .id();
+                };
+            }
+            Common.ObjectId resolvedObjectId = objectId;
+            List<Catalog.CatalogChange> changes = new ArrayList<>();
+            statement.privileges().forEach(privilegeName -> changes.add(new Catalog.GrantPrivilegeChange(
+                    principalType,
+                    statement.grantee().toLowerCase(Locale.ROOT),
+                    Catalog.Privilege.valueOf(privilegeName.toUpperCase(Locale.ROOT)),
+                    resolvedObjectId)));
+            if (changes.size() != 1) {
+                throw new Common.DatabaseException(Common.ErrorCode.UNSUPPORTED_FEATURE,
+                        "Multiple privilege grants must be issued separately", statement.span());
+            }
+            return new BoundCatalogStatement(changes.getFirst(), statement.span());
+        }
+
+        private Catalog.PrincipalType resolvePrincipalType(String grantee, Common.SourceSpan span) {
+            String lowered = grantee.toLowerCase(Locale.ROOT);
+            if (catalogSnapshot.usersByName().containsKey(lowered)) {
+                return Catalog.PrincipalType.USER;
+            }
+            if (catalogSnapshot.rolesByName().containsKey(lowered)) {
+                return Catalog.PrincipalType.ROLE;
+            }
+            throw new Common.DatabaseException(Common.ErrorCode.SEMANTIC_ERROR,
+                    "Unknown grantee " + grantee, span);
         }
 
         private Integer normalizePrecision(Common.DataType type, Integer precision, Integer scale, Common.SourceSpan span) {
@@ -591,6 +658,8 @@ public final class Planner {
                         List.of(TypeHint.of(Common.DataType.TEXT), TypeHint.of(Common.DataType.BIGINT), TypeHint.of(Common.DataType.BIGINT)));
                 case "REPLACE" -> bindArguments(functionCall.arguments(), table,
                         List.of(TypeHint.of(Common.DataType.TEXT), TypeHint.of(Common.DataType.TEXT), TypeHint.of(Common.DataType.TEXT)));
+                case "BLOB_FROM_BASE64", "ARRAY_PARSE", "STRUCT_PARSE", "REF_PARSE", "ROWID_FROM_BASE64", "XMLPARSE" ->
+                        bindArguments(functionCall.arguments(), table, List.of(TypeHint.of(Common.DataType.TEXT)));
                 case "COALESCE", "NVL" -> bindCoalesceArguments(functionCall.arguments(), table);
                 default -> functionCall.arguments().stream()
                         .map(argument -> bindExpression(argument, table, TypeHint.UNKNOWN))
@@ -605,8 +674,14 @@ public final class Planner {
                 case "TRIM" -> ScalarFunction.TRIM;
                 case "SUBSTR", "SUBSTRING" -> ScalarFunction.SUBSTR;
                 case "REPLACE" -> ScalarFunction.REPLACE;
+                case "BLOB_FROM_BASE64" -> ScalarFunction.BLOB_FROM_BASE64;
+                case "ARRAY_PARSE" -> ScalarFunction.ARRAY_PARSE;
+                case "STRUCT_PARSE" -> ScalarFunction.STRUCT_PARSE;
+                case "REF_PARSE" -> ScalarFunction.REF_PARSE;
+                case "ROWID_FROM_BASE64" -> ScalarFunction.ROWID_FROM_BASE64;
+                case "XMLPARSE" -> ScalarFunction.XMLPARSE;
                 default -> throw new Common.DatabaseException(Common.ErrorCode.UNSUPPORTED_FEATURE,
-                        "Only COUNT, SUM, MIN, MAX, AVG, LOWER, UPPER, LENGTH, ABS, COALESCE, NVL, TRIM, SUBSTR, SUBSTRING, and REPLACE are supported in the current execution slice",
+                        "Only COUNT, SUM, MIN, MAX, AVG, LOWER, UPPER, LENGTH, ABS, COALESCE, NVL, TRIM, SUBSTR, SUBSTRING, REPLACE, BLOB_FROM_BASE64, ARRAY_PARSE, STRUCT_PARSE, REF_PARSE, ROWID_FROM_BASE64, and XMLPARSE are supported in the current execution slice",
                         functionCall.span());
             };
             Common.DataType resultType = resolveScalarFunctionType(function, name, arguments, functionCall.span());
@@ -758,6 +833,36 @@ public final class Planner {
                     requireType(rawName, arguments.get(2), Common.DataType.TEXT, span);
                     yield Common.DataType.TEXT;
                 }
+                case BLOB_FROM_BASE64 -> {
+                    requireExactArity(rawName, arguments, 1, span);
+                    requireType(rawName, arguments.getFirst(), Common.DataType.TEXT, span);
+                    yield Common.DataType.BLOB;
+                }
+                case ARRAY_PARSE -> {
+                    requireExactArity(rawName, arguments, 1, span);
+                    requireType(rawName, arguments.getFirst(), Common.DataType.TEXT, span);
+                    yield Common.DataType.ARRAY;
+                }
+                case STRUCT_PARSE -> {
+                    requireExactArity(rawName, arguments, 1, span);
+                    requireType(rawName, arguments.getFirst(), Common.DataType.TEXT, span);
+                    yield Common.DataType.STRUCT;
+                }
+                case REF_PARSE -> {
+                    requireExactArity(rawName, arguments, 1, span);
+                    requireType(rawName, arguments.getFirst(), Common.DataType.TEXT, span);
+                    yield Common.DataType.REF;
+                }
+                case ROWID_FROM_BASE64 -> {
+                    requireExactArity(rawName, arguments, 1, span);
+                    requireType(rawName, arguments.getFirst(), Common.DataType.TEXT, span);
+                    yield Common.DataType.ROWID;
+                }
+                case XMLPARSE -> {
+                    requireExactArity(rawName, arguments, 1, span);
+                    requireType(rawName, arguments.getFirst(), Common.DataType.TEXT, span);
+                    yield Common.DataType.SQLXML;
+                }
             };
         }
 
@@ -885,6 +990,42 @@ public final class Planner {
                         yield Common.Value.nullValue(type);
                     }
                     yield Common.Value.text(text.asText().replace(search.asText(), replacement.asText()));
+                }
+                case BLOB_FROM_BASE64 -> {
+                    Common.Value text = arguments.getFirst();
+                    yield text == null || text.isNull()
+                            ? Common.Value.nullValue(type)
+                            : Common.Value.blob(java.util.Base64.getDecoder().decode(text.asText()));
+                }
+                case ARRAY_PARSE -> {
+                    Common.Value text = arguments.getFirst();
+                    yield text == null || text.isNull()
+                            ? Common.Value.nullValue(type)
+                            : new Common.Value(Common.DataType.ARRAY, text.asText());
+                }
+                case STRUCT_PARSE -> {
+                    Common.Value text = arguments.getFirst();
+                    yield text == null || text.isNull()
+                            ? Common.Value.nullValue(type)
+                            : new Common.Value(Common.DataType.STRUCT, text.asText());
+                }
+                case REF_PARSE -> {
+                    Common.Value text = arguments.getFirst();
+                    yield text == null || text.isNull()
+                            ? Common.Value.nullValue(type)
+                            : new Common.Value(Common.DataType.REF, text.asText());
+                }
+                case ROWID_FROM_BASE64 -> {
+                    Common.Value text = arguments.getFirst();
+                    yield text == null || text.isNull()
+                            ? Common.Value.nullValue(type)
+                            : Common.Value.rowIdBytes(java.util.Base64.getDecoder().decode(text.asText()));
+                }
+                case XMLPARSE -> {
+                    Common.Value text = arguments.getFirst();
+                    yield text == null || text.isNull()
+                            ? Common.Value.nullValue(type)
+                            : Common.Value.sqlxml(text.asText());
                 }
             };
         }
