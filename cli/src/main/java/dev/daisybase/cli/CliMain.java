@@ -13,6 +13,10 @@ public final class CliMain {
     }
 
     public static void main(String[] args) throws Exception {
+        if (BulkLoadUtility.isDirectCommand(args)) {
+            runBulkLoadCommand(args);
+            return;
+        }
         LaunchConfig config = resolveConfig(args);
         applyReferenceParserSettings(config);
         try (EngineApi.DatabaseEngine engine = EmbeddedDatabaseEngine.open(config.databaseConfig());
@@ -45,7 +49,25 @@ public final class CliMain {
         }
     }
 
-    private static LaunchConfig resolveConfig(String[] args) {
+    private static void runBulkLoadCommand(String[] args) throws Exception {
+        BulkLoadUtility.LoadCommand command = BulkLoadUtility.parseCommand(args);
+        LaunchConfig config = resolveConfig(command);
+        applyReferenceParserSettings(config);
+        try (EngineApi.DatabaseEngine engine = EmbeddedDatabaseEngine.open(config.databaseConfig());
+             EngineApi.Session session = engine.openSession()) {
+            BulkLoadUtility.BulkLoadResult result = BulkLoadUtility.execute(session, command.request());
+            System.out.println(BulkLoadUtility.renderSummary(result));
+        }
+    }
+
+    private static LaunchConfig resolveConfig(BulkLoadUtility.LoadCommand command) {
+        if (command.configPath() != null) {
+            return LaunchConfig.load(command.configPath());
+        }
+        return LaunchConfig.defaults(command.home() == null ? Path.of("./db-home") : command.home());
+    }
+
+    static LaunchConfig resolveConfig(String[] args) {
         if (args.length >= 2 && "--config".equalsIgnoreCase(args[0])) {
             return LaunchConfig.load(Path.of(args[1]));
         }
@@ -53,7 +75,7 @@ public final class CliMain {
         return LaunchConfig.defaults(home);
     }
 
-    private static void applyReferenceParserSettings(LaunchConfig config) {
+    static void applyReferenceParserSettings(LaunchConfig config) {
         System.setProperty("daisybase.sql.referenceParser.mode", config.referenceParserMode());
         System.setProperty("javadb.sql.referenceParser.mode", config.referenceParserMode());
         if (config.referenceParserHome() != null) {

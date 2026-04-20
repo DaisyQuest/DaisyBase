@@ -45,6 +45,17 @@ Representative flow:
 ./cli/build/install/cli/bin/cli.bat
 ```
 
+Bulk-load a delimited file directly into a table with a prepared insert template:
+
+```bash
+bash ./gradlew --no-daemon :cli:installDist
+./cli/build/install/cli/bin/cli load \
+  --home ./db-home \
+  --file ./people.csv \
+  --sql "INSERT INTO people (id, name, active) VALUES (?, ?, ?)" \
+  --header
+```
+
 ## Demo Business App Quickstart
 
 The demo business application deploys to TomEE and uses DaisyBase through the shipped JDBC driver.
