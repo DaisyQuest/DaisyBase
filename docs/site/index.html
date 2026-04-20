@@ -4,22 +4,40 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DaisyBase Documentation Portal</title>
-  <meta name="description" content="Accessible documentation portal for DaisyBase, its architecture, installers, JDBC driver, demo business app, and MCP description system.">
+  <meta name="description" content="GitHub Pages portal for DaisyBase guides, architecture notes, and a generated API reference suite that covers the public Java surface.">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to main content</a>
-  <header class="site-header">
-    <p class="eyebrow">DaisyBase Documentation</p>
-    <h1>Readable, Accessible, and Honest</h1>
-    <p class="lede">This portal is the top-level map for the DaisyBase product, codebase, operational model, compatibility surface, and MCP description system.</p>
+  <header class="site-header hero-shell">
+    <p class="eyebrow">DaisyBase GitHub Pages</p>
+    <h1>Beautiful docs for a serious database</h1>
+    <p class="lede">The GitHub Pages suite combines the DaisyBase handbook, a generated API atlas, and themed Javadocs so the whole product surface is easy to browse instead of scattered across modules.</p>
+    <div class="cta-row">
+      <a class="button-link" href="api/index.html">Open the API atlas</a>
+      <a class="button-link button-link-secondary" href="api/javadocs/engine-api/index.html">Browse Javadocs</a>
+    </div>
+    <div class="stats-grid">
+      <article class="stat-card">
+        <span class="stat-value">18</span>
+        <span class="stat-label">Modules indexed</span>
+      </article>
+      <article class="stat-card">
+        <span class="stat-value">100%</span>
+        <span class="stat-label">Public Java surface covered</span>
+      </article>
+      <article class="stat-card">
+        <span class="stat-value">2</span>
+        <span class="stat-label">Ways to browse: atlas + Javadocs</span>
+      </article>
+    </div>
     <nav aria-label="Primary">
       <ul class="nav-list">
-        <li><a href="../README.md">Handbook Index</a></li>
-        <li><a href="../guides/read-me-first.md">Read Me First</a></li>
-        <li><a href="../50-point-documentation-plan.md">50-Point Plan</a></li>
-        <li><a href="../mcp-description-system.md">MCP Description System</a></li>
-        <li><a href="../../installer/README.md">Installer Guide</a></li>
+        <li><a href="api/index.html">API Atlas</a></li>
+        <li><a href="api/javadocs/jdbc/index.html">JDBC Javadocs</a></li>
+        <li><a href="api/javadocs/orm/index.html">ORM Javadocs</a></li>
+        <li><a href="api/catalog.json">API Catalog JSON</a></li>
+        <li><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/docs/README.md">Handbook Index</a></li>
       </ul>
     </nav>
   </header>
@@ -27,95 +45,117 @@
   <main id="main-content">
     <section aria-labelledby="coverage-title" class="panel hero-panel">
       <h2 id="coverage-title">Coverage Promise</h2>
-      <p>The documentation set covers product framing, setup, architecture, runtime surfaces, SQL, JDBC, storage, WAL, operations, security, quality, the demo application, and known limits. The same structure is available through a machine-readable MCP server.</p>
+      <p>The documentation set now covers the full public Java API surface with generated module Javadocs, a browsable API atlas, and direct links back to source. Narrative guides still cover setup, architecture, SQL, JDBC, storage, operations, and known limits.</p>
+    </section>
+
+    <section aria-labelledby="suite-title" class="panel">
+      <h2 id="suite-title">Documentation Suite</h2>
+      <div class="surface-grid">
+        <article class="surface-card">
+          <h3><a href="api/index.html">API Atlas</a></h3>
+          <p>See every public module, package, and top-level type in one place, with links to source and narrative guides.</p>
+        </article>
+        <article class="surface-card">
+          <h3><a href="api/javadocs/engine-api/index.html">Themed Javadocs</a></h3>
+          <p>Generated HTML docs for the member-level Java API, styled to match the Pages portal.</p>
+        </article>
+        <article class="surface-card">
+          <h3><a href="api/catalog.json">Machine-readable API catalog</a></h3>
+          <p>Consume the same atlas data as JSON for tooling, indexing, and future search experiences.</p>
+        </article>
+      </div>
     </section>
 
     <section aria-labelledby="start-title" class="panel">
       <h2 id="start-title">Start Here</h2>
       <div class="card-grid">
         <article class="card">
-          <h3><a href="../guides/read-me-first.md">Read Me First</a></h3>
+          <h3><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/docs/guides/read-me-first.md">Read Me First</a></h3>
           <p>Short, plain-language orientation for what DaisyBase is, how to run it, and what is intentionally bounded.</p>
         </article>
         <article class="card">
-          <h3><a href="../getting-started/quickstart.md">Quickstart</a></h3>
+          <h3><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/docs/getting-started/quickstart.md">Quickstart</a></h3>
           <p>Fast path for embedded, server, CLI, and demo use.</p>
         </article>
         <article class="card">
-          <h3><a href="../getting-started/installers.md">Installers</a></h3>
+          <h3><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/docs/getting-started/installers.md">Installers</a></h3>
           <p>Windows and Linux, GUI and headless, including the demo-business installer profile.</p>
         </article>
         <article class="card">
-          <h3><a href="../architecture/system-overview.md">Architecture</a></h3>
+          <h3><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/docs/architecture/system-overview.md">Architecture</a></h3>
           <p>Top-level system shape, durability model, transaction model, and internal layers.</p>
         </article>
         <article class="card">
-          <h3><a href="../reference/jdbc-surface.md">JDBC</a></h3>
+          <h3><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/docs/reference/jdbc-surface.md">JDBC Surface</a></h3>
           <p>Supported JDBC behavior, bounded areas, and how to reason about conformance.</p>
         </article>
         <article class="card">
-          <h3><a href="../reference/orm-tooling.md">ORM Tooling</a></h3>
+          <h3><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/docs/reference/orm-tooling.md">ORM Tooling</a></h3>
           <p>Annotation-driven entities, CRUD helpers, code generation, and the ORM MCP server.</p>
         </article>
       </div>
     </section>
 
-    <section aria-labelledby="guides-title" class="panel">
-      <h2 id="guides-title">Readable Guides</h2>
-      <div class="card-grid">
-        <article class="card">
-          <h3><a href="../guides/choose-your-runtime.md">Choose Your Runtime</a></h3>
-          <p>Pick embedded mode, server mode, the demo stack, or JDBC plus ORM with a clear tradeoff guide.</p>
-        </article>
-        <article class="card">
-          <h3><a href="../guides/how-daisybase-thinks.md">How DaisyBase Thinks</a></h3>
-          <p>The practical rules behind parsing, planning, storage, recovery, and bounded feature support.</p>
-        </article>
-        <article class="card">
-          <h3><a href="../guides/building-an-app-with-jdbc-and-orm.md">Build an App with JDBC and ORM</a></h3>
-          <p>Where the ORM is useful, where JDBC is still the right tool, and how to combine them.</p>
-        </article>
-      </div>
-    </section>
-
     <section aria-labelledby="map-title" class="panel">
-      <h2 id="map-title">Documentation Map</h2>
+      <h2 id="map-title">Guide Map</h2>
       <div class="split-grid">
         <div>
           <h3>Readable Guides</h3>
           <ul>
-            <li><a href="../guides/read-me-first.md">Read Me First</a></li>
-            <li><a href="../guides/choose-your-runtime.md">Choose Your Runtime</a></li>
-            <li><a href="../guides/how-daisybase-thinks.md">How DaisyBase Thinks</a></li>
-            <li><a href="../guides/building-an-app-with-jdbc-and-orm.md">Building an App with JDBC and ORM</a></li>
+            <li><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/docs/guides/read-me-first.md">Read Me First</a></li>
+            <li><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/docs/guides/choose-your-runtime.md">Choose Your Runtime</a></li>
+            <li><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/docs/guides/how-daisybase-thinks.md">How DaisyBase Thinks</a></li>
+            <li><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/docs/guides/building-an-app-with-jdbc-and-orm.md">Building an App with JDBC and ORM</a></li>
           </ul>
           <h3>Getting Started</h3>
           <ul>
-            <li><a href="../getting-started/quickstart.md">Quickstart</a></li>
-            <li><a href="../getting-started/installers.md">Installer Guide</a></li>
+            <li><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/docs/getting-started/quickstart.md">Quickstart</a></li>
+            <li><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/docs/getting-started/installers.md">Installer Guide</a></li>
           </ul>
           <h3>Architecture</h3>
           <ul>
-            <li><a href="../architecture/system-overview.md">System Overview</a></li>
-            <li><a href="../architecture/module-map.md">Module Map</a></li>
-            <li><a href="../architecture/storage-recovery.md">Storage and Recovery</a></li>
-            <li><a href="../architecture/query-lifecycle.md">Query Lifecycle</a></li>
+            <li><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/docs/architecture/system-overview.md">System Overview</a></li>
+            <li><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/docs/architecture/module-map.md">Module Map</a></li>
+            <li><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/docs/architecture/storage-recovery.md">Storage and Recovery</a></li>
+            <li><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/docs/architecture/query-lifecycle.md">Query Lifecycle</a></li>
           </ul>
         </div>
         <div>
           <h3>Reference</h3>
           <ul>
-            <li><a href="../reference/runtime-surfaces.md">Runtime Surfaces</a></li>
-            <li><a href="../reference/sql-surface.md">SQL Surface</a></li>
-            <li><a href="../reference/jdbc-surface.md">JDBC Surface</a></li>
-            <li><a href="../reference/orm-tooling.md">ORM Tooling</a></li>
-            <li><a href="../reference/security-and-distributed-xa.md">Security and Distributed XA</a></li>
-            <li><a href="../reference/operations-runbook.md">Operations Runbook</a></li>
-            <li><a href="../reference/testing-and-quality.md">Testing and Quality</a></li>
-            <li><a href="../reference/demo-business-app.md">Demo Business App</a></li>
-            <li><a href="../reference/known-limits-and-roadmap.md">Known Limits and Roadmap</a></li>
+            <li><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/docs/reference/runtime-surfaces.md">Runtime Surfaces</a></li>
+            <li><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/docs/reference/sql-surface.md">SQL Surface</a></li>
+            <li><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/docs/reference/jdbc-surface.md">JDBC Surface</a></li>
+            <li><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/docs/reference/orm-tooling.md">ORM Tooling</a></li>
+            <li><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/docs/reference/security-and-distributed-xa.md">Security and Distributed XA</a></li>
+            <li><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/docs/reference/operations-runbook.md">Operations Runbook</a></li>
+            <li><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/docs/reference/testing-and-quality.md">Testing and Quality</a></li>
+            <li><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/docs/reference/demo-business-app.md">Demo Business App</a></li>
+            <li><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/docs/reference/known-limits-and-roadmap.md">Known Limits and Roadmap</a></li>
           </ul>
         </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="modules-title" class="panel">
+      <h2 id="modules-title">Browse the biggest surfaces first</h2>
+      <div class="card-grid">
+        <article class="card">
+          <h3><a href="api/javadocs/engine-api/index.html">Engine API</a></h3>
+          <p>Embedded runtime, sessions, prepared statements, transport contracts, sequences, routines, and XA building blocks.</p>
+        </article>
+        <article class="card">
+          <h3><a href="api/javadocs/jdbc/index.html">JDBC</a></h3>
+          <p>Driver, data sources, connection handling, metadata, updatable result sets, and compatibility shims.</p>
+        </article>
+        <article class="card">
+          <h3><a href="api/javadocs/orm/index.html">ORM</a></h3>
+          <p>Entity mapping, CRUD helpers, repository wrappers, introspection, and schema-to-code generation.</p>
+        </article>
+        <article class="card">
+          <h3><a href="api/javadocs/server/index.html">Server Runtime</a></h3>
+          <p>Binary protocol entry points and the runtime used when DaisyBase runs as a standalone server.</p>
+        </article>
       </div>
     </section>
 
@@ -132,10 +172,14 @@
 
     <section aria-labelledby="machine-title" class="panel">
       <h2 id="machine-title">Machine-Readable Layer</h2>
-      <p>The MCP description system mirrors the human docs. It exposes structured resources and tools for modules, runtime surfaces, ORM tooling, limits, and the 50-point coverage plan.</p>
-      <p><a href="../mcp-description-system.md">Open the MCP description system guide</a></p>
-      <p><a href="../../tools/daisybase-orm-mcp/README.md">Open the ORM MCP server guide</a></p>
+      <p>The MCP description system mirrors the human docs, and the Pages suite now adds a generated API catalog JSON for the public Java surface as well.</p>
+      <p><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/docs/mcp-description-system.md">Open the MCP description system guide</a></p>
+      <p><a href="https://github.com/DaisyQuest/DaisyBase/blob/main/tools/daisybase-orm-mcp/README.md">Open the ORM MCP server guide</a></p>
+      <p><a href="api/catalog.json">Open the Pages API catalog</a></p>
     </section>
   </main>
+  <footer class="site-footer">
+    <p>Want to regenerate the site locally? Run <code>bash ./gradlew --no-daemon githubPagesSite</code> from the repository root and open <code>build/gh-pages/index.html</code>.</p>
+  </footer>
 </body>
 </html>

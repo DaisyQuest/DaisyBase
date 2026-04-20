@@ -6,7 +6,9 @@ $required = @(
   'docs\50-point-documentation-plan.md',
   'docs\site\index.html',
   'docs\site\styles.css',
+  'docs\site\javadoc-stylesheet.css',
   'docs\system\daisybase-system-catalog.json',
+  '.github\workflows\github-pages.yml',
   'tools\daisybase-system-mcp\server.py',
   'tools\daisybase-system-mcp\test_server.py'
 )
@@ -26,5 +28,6 @@ $catalog = Get-Content (Join-Path $root 'docs\system\daisybase-system-catalog.js
 if ($catalog.coveragePlan.implementedPoints -ne 50) { throw 'Coverage plan count is not 50.' }
 if ($catalog.modules.Count -lt 10) { throw 'System catalog is unexpectedly incomplete.' }
 
+$env:PYTHONDONTWRITEBYTECODE = "1"
 & py -3 (Join-Path $root 'tools\daisybase-system-mcp\test_server.py')
 Write-Host 'Documentation validation passed.'

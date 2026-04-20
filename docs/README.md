@@ -73,3 +73,19 @@ The documentation system aims to be easy to read and easy to navigate:
 - keyboard-accessible portal with skip link and visible focus states
 
 The human-facing docs and the machine-readable catalog are meant to describe the same system, not two different stories.
+
+## GitHub Pages API Suite
+
+The repository also ships a Pages-ready documentation build:
+
+- the portal at `docs/site/index.html`
+- a generated API atlas with module/package/type coverage
+- themed Javadocs for each Java module
+
+Build it locally from the repository root with:
+
+```bash
+bash ./gradlew --no-daemon githubPagesSite
+```
+
+The output is written to `build/gh-pages/`.
