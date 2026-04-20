@@ -1,0 +1,162 @@
+:root {
+  --page-bg: #f4efe4;
+  --panel-bg: rgba(255, 252, 246, 0.96);
+  --panel-strong: #fcf7ee;
+  --ink: #1b2430;
+  --muted: #5a6672;
+  --accent: #0f6a70;
+  --accent-strong: #083b40;
+  --border: #d7cfbf;
+  --warm: #b86e23;
+  --shadow: 0 18px 40px rgba(20, 28, 36, 0.08);
+}
+
+body,
+.flex-box,
+.index-container,
+.class-use-container,
+.deprecated-list-container,
+.help-container,
+.all-packages-container,
+.all-classes-container,
+.serialized-form-container,
+.constant-values-container {
+  background:
+    radial-gradient(circle at top right, rgba(15, 106, 112, 0.12), transparent 24rem),
+    linear-gradient(180deg, #f8f2e8 0%, var(--page-bg) 18rem, var(--page-bg) 100%);
+  color: var(--ink);
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+a:link,
+a:visited,
+.member-name-link a,
+.summary-table a,
+.details-table a {
+  color: var(--accent-strong);
+}
+
+a:hover,
+a:focus {
+  color: var(--accent);
+}
+
+.top-nav,
+.sub-nav,
+.header,
+.footer,
+.summary-table,
+.details-table,
+.member-summary,
+.details,
+.package-description,
+.class-description,
+.block,
+.caption,
+table,
+section.detail,
+section.summary {
+  background: var(--panel-bg);
+}
+
+.top-nav,
+.sub-nav {
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+.header,
+.contentContainer,
+.summary,
+.details,
+.package-description,
+.class-description,
+.summary-table,
+.details-table,
+section.detail,
+section.summary {
+  border-color: var(--border);
+}
+
+.table-header,
+th,
+.col-first,
+.col-second,
+.col-last,
+.summary-table > div,
+.details-table > div {
+  background: var(--panel-strong);
+}
+
+.table-header,
+th {
+  color: var(--accent-strong);
+}
+
+.member-signature,
+.type-signature,
+.package-signature,
+pre {
+  background: #f7f1e6;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.9rem 1rem;
+}
+
+.title,
+h1,
+h2,
+h3,
+h4,
+.package-label-in-type,
+.type-name-label,
+.module-label-in-type {
+  color: var(--ink);
+}
+
+.block,
+.notes,
+.deprecation-comment,
+.deprecated-label,
+.descfrm-type-label,
+.help-footnote,
+.sub-nav-list,
+.nav-bar-cell1-rev,
+.nav-bar-cell1-rev a {
+  color: var(--muted);
+}
+
+.nav-list-search input,
+#search-input {
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+
+.current-selection,
+.active-table-tab,
+.table-tabs .active-table-tab {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 999px;
+}
+
+.table-tabs > button,
+.table-tab {
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+
+.inheritance,
+.type-signature,
+.member-signature,
+.notes,
+.tag-list dt {
+  color: var(--accent-strong);
+}
+
+.deprecated-label,
+.restricted-label {
+  color: var(--warm);
+}

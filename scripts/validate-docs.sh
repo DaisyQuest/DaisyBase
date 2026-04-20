@@ -8,7 +8,9 @@ required=(
   "$root/docs/50-point-documentation-plan.md"
   "$root/docs/site/index.html"
   "$root/docs/site/styles.css"
+  "$root/docs/site/javadoc-stylesheet.css"
   "$root/docs/system/daisybase-system-catalog.json"
+  "$root/.github/workflows/github-pages.yml"
   "$root/tools/daisybase-system-mcp/server.py"
   "$root/tools/daisybase-system-mcp/test_server.py"
 )
@@ -34,5 +36,6 @@ if len(catalog['modules']) < 10:
     raise SystemExit('System catalog is unexpectedly incomplete.')
 PY
 
+export PYTHONDONTWRITEBYTECODE=1
 python3 "$root/tools/daisybase-system-mcp/test_server.py"
 echo 'Documentation validation passed.'
