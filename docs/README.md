@@ -1,33 +1,38 @@
 # DaisyBase Documentation Handbook
 
-This handbook is the primary entry point for the DaisyBase codebase, runtime surfaces, compatibility story, operations model, and demo application.
+This handbook is the main route through the DaisyBase repository.
 
-## Documentation Goals
+It is organized for three kinds of readers:
 
-- Give a new engineer a fast path from zero context to productive changes.
-- Give operators a direct route to installation, configuration, startup, shutdown, and troubleshooting.
-- Give integrators an honest contract for SQL, JDBC, server, security, and XA behavior.
-- Keep machine-readable structure aligned with the human-facing handbook through the MCP description server.
+- someone trying to get the system running
+- someone integrating with it through JDBC, installers, or the demo app
+- someone changing the code and needing to understand how the pieces fit together
 
-## Navigation
+## How to Use This Handbook
 
-### Readable Guides
+If you are new here, do not start with the deepest reference page. Start with orientation, then move into the specific surface you need.
+
+### Orientation
+
 - [Read Me First](guides/read-me-first.md)
 - [Choose Your Runtime](guides/choose-your-runtime.md)
 - [How DaisyBase Thinks](guides/how-daisybase-thinks.md)
 - [Building an App with JDBC and ORM](guides/building-an-app-with-jdbc-and-orm.md)
 
-### Getting Started
+### Setup
+
 - [Quickstart](getting-started/quickstart.md)
 - [Installer Guide](getting-started/installers.md)
 
 ### Architecture
+
 - [System Overview](architecture/system-overview.md)
 - [Module Map](architecture/module-map.md)
 - [Storage and Recovery](architecture/storage-recovery.md)
 - [Query Lifecycle](architecture/query-lifecycle.md)
 
-### Reference
+### Product Reference
+
 - [Runtime Surfaces](reference/runtime-surfaces.md)
 - [SQL Surface](reference/sql-surface.md)
 - [JDBC Surface](reference/jdbc-surface.md)
@@ -38,18 +43,33 @@ This handbook is the primary entry point for the DaisyBase codebase, runtime sur
 - [Demo Business App](reference/demo-business-app.md)
 - [Known Limits and Roadmap](reference/known-limits-and-roadmap.md)
 
-### Governance
+### Documentation and Machine-Readable Metadata
+
 - [50-Point Documentation Plan](50-point-documentation-plan.md)
 - [MCP Description System](mcp-description-system.md)
 - [ORM MCP Server](../tools/daisybase-orm-mcp/README.md)
 
+## Documentation Standard
+
+The rule for DaisyBase documentation is simple: be useful before being impressive.
+
+In practice, that means:
+
+- write in direct sentences
+- state what a feature does and what it does not do
+- prefer structure over flourish
+- keep limits visible
+- make navigation obvious
+
 ## Accessibility Notes
 
-The documentation system follows these rules:
+The documentation system aims to be easy to read and easy to navigate:
 
-- one clear heading hierarchy per page
-- semantic section titles instead of visual-only emphasis
+- one heading hierarchy per page
+- explicit link labels
+- semantic structure instead of visual-only emphasis
+- readable line lengths
 - no meaning conveyed by color alone
-- readable line lengths and explicit link labels
-- keyboard-accessible docs portal with skip link and visible focus states
-- machine-readable catalog that mirrors the written handbook instead of diverging from it
+- keyboard-accessible portal with skip link and visible focus states
+
+The human-facing docs and the machine-readable catalog are meant to describe the same system, not two different stories.

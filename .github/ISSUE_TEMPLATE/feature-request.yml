@@ -1,0 +1,45 @@
+﻿name: Feature request
+description: Propose a concrete improvement with a clear use case.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Feature requests are welcome when they are specific.
+
+        Describe the use case, the current limitation, and the concrete outcome you need.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to do, and why is current behavior insufficient?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: Describe the feature you want as concretely as you can.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What did you try, or what other approaches did you consider?
+  - type: textarea
+    id: impact
+    attributes:
+      label: Expected impact
+      description: Who benefits, and what becomes possible or easier?
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Final checks
+      options:
+        - label: I checked the roadmap and known limits documents first.
+          required: true
+        - label: This request describes a real use case rather than a broad preference.
+          required: true

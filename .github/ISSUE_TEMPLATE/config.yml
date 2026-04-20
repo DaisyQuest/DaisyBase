@@ -1,0 +1,11 @@
+﻿blank_issues_enabled: false
+contact_links:
+  - name: DaisyBase support guide
+    url: https://github.com/DaisyQuest/DaisyBase/blob/main/SUPPORT.md
+    about: Start here for setup, runtime, JDBC, and integration questions.
+  - name: DaisyBase security policy
+    url: https://github.com/DaisyQuest/DaisyBase/blob/main/SECURITY.md
+    about: Use the private reporting path for security issues.
+  - name: DaisyBase documentation handbook
+    url: https://github.com/DaisyQuest/DaisyBase/blob/main/docs/README.md
+    about: Review the handbook before filing documentation or usage issues.

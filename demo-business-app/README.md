@@ -1,17 +1,19 @@
 # DaisyBase Demo Business Application
 
-This module packages a TomEE-compatible WAR that runs a small enterprise operations cockpit on top of DaisyBase and the DaisyBase JDBC driver.
+This module packages a TomEE-compatible WAR that runs a small operations cockpit on top of DaisyBase and the DaisyBase JDBC driver.
 
-## What It Demonstrates
+The point of the demo is not spectacle. It is to show what the database looks like inside an ordinary business application: REST endpoints, frontend pages, generated keys, stored routines, and a useful slice of operational workflow.
 
-- TomEE-hosted Jakarta EE 10 backend using JAX-RS and CDI
-- DaisyBase JDBC integration in embedded mode
-- enterprise CRUD and operations flows using plain JDBC
-- generated keys for business inserts
-- callable JDBC usage for order fulfillment routines
-- a static frontend served from the WAR
+## What the Demo Shows
 
-## Demo Surface
+- Jakarta EE 10 backend using JAX-RS and CDI
+- embedded DaisyBase usage through JDBC
+- customer, product, and order workflows
+- generated-key inserts for business entities
+- callable JDBC for fulfillment routines
+- a deployable frontend served directly from the WAR
+
+## API Surface
 
 Backend endpoints:
 
@@ -25,13 +27,15 @@ Backend endpoints:
 - `POST /api/orders`
 - `POST /api/orders/{orderId}/fulfill`
 
-Frontend workflows:
+## Frontend Surface
 
-- operations dashboard and risk radar
+The frontend provides:
+
+- an operations dashboard
 - employee, customer, and product directories
-- customer and product creation through generated keys
-- order creation with live stock deduction
-- order fulfillment through a stored procedure and stored function
+- customer and product creation
+- order creation with stock-aware behavior
+- order fulfillment through stored procedure and function calls
 
 ## Build
 
@@ -39,27 +43,27 @@ Frontend workflows:
 ./gradlew.bat :demo-business-app:war
 ```
 
-The WAR is written to:
+Output:
 
 - `demo-business-app/build/libs/daisybase-demo-business-0.1.0-SNAPSHOT.war`
 
-## TomEE Deployment
+## Deploy to TomEE
 
 1. Build the WAR.
-2. Copy the WAR into a TomEE 10 `webapps/` directory.
+2. Copy it into a TomEE 10 `webapps/` directory.
 3. Start TomEE.
 4. Open `http://localhost:8080/daisybase-demo-business-0.1.0-SNAPSHOT/`.
 
-Example against the local TomEE install on this machine:
+Example:
 
 ```powershell
 Copy-Item .\demo-business-app\build\libs\daisybase-demo-business-0.1.0-SNAPSHOT.war `
   C:\Users\tabur\Downloads\apache-tomee-10.1.2-plus\webapps\
 ```
 
-## Runtime Configuration
+## Configuration
 
-The application reads these system properties or environment variables at startup:
+The application reads these system properties or environment variables:
 
 - `daisybase.demo.jdbcUrl` or `JAVADB_DEMO_JDBC_URL`
 - `daisybase.demo.user` or `JAVADB_DEMO_USER`
@@ -70,10 +74,10 @@ Default JDBC URL:
 
 - `jdbc:daisybase:embedded:${user.home}/.daisybase/demo-business`
 
-The application bootstraps its own schema and seed data on first startup.
+On first startup, the application bootstraps its own schema and seed data.
 
-## Local TomEE Target
+## Local TomEE Note
 
-A compatible local install already exists on this machine:
+On this machine, a compatible TomEE install already exists at:
 
 - `C:\Users\tabur\Downloads\apache-tomee-10.1.2-plus`

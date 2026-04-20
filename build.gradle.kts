@@ -17,6 +17,15 @@ allprojects {
 
 val requiredDocumentationFiles = listOf(
     "README.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "SUPPORT.md",
+    "CODE_OF_CONDUCT.md",
+    ".github/ISSUE_TEMPLATE/config.yml",
+    ".github/ISSUE_TEMPLATE/bug-report.yml",
+    ".github/ISSUE_TEMPLATE/feature-request.yml",
+    ".github/ISSUE_TEMPLATE/documentation.yml",
+    ".github/PULL_REQUEST_TEMPLATE.md",
     "docs/README.md",
     "docs/50-point-documentation-plan.md",
     "docs/guides/read-me-first.md",
