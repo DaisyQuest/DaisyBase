@@ -1,4 +1,4 @@
-# JavaDB Conformance Execution Program
+# DaisyBase Conformance Execution Program
 
 ## 1. Purpose
 
@@ -28,19 +28,19 @@ The shared dependency stack is:
 
 The highest-conflict files are:
 
-- `sql-frontend/src/main/java/dev/javadb/sql/SqlFrontend.java`
-- `sql-frontend/src/main/java/dev/javadb/sql/ReferencePlsqlParserBridge.java`
-- `catalog/src/main/java/dev/javadb/catalog/Catalog.java`
-- `common/src/main/java/dev/javadb/common/Common.java`
-- `planner/src/main/java/dev/javadb/planner/Planner.java`
-- `execution/src/main/java/dev/javadb/execution/Execution.java`
-- `engine-api/src/main/java/dev/javadb/engine/EngineApi.java`
-- `engine-api/src/main/java/dev/javadb/engine/EmbeddedDatabaseEngine.java`
-- `engine-api/src/main/java/dev/javadb/engine/RemoteProtocol.java`
-- `jdbc/src/main/java/dev/javadb/jdbc/JavaDbConnection.java`
-- `jdbc/src/main/java/dev/javadb/jdbc/JavaDbStatement.java`
-- `jdbc/src/main/java/dev/javadb/jdbc/JavaDbPreparedStatement.java`
-- `jdbc/src/main/java/dev/javadb/jdbc/JavaDbDatabaseMetaData.java`
+- `sql-frontend/src/main/java/dev/daisybase/sql/SqlFrontend.java`
+- `sql-frontend/src/main/java/dev/daisybase/sql/ReferencePlsqlParserBridge.java`
+- `catalog/src/main/java/dev/daisybase/catalog/Catalog.java`
+- `common/src/main/java/dev/daisybase/common/Common.java`
+- `planner/src/main/java/dev/daisybase/planner/Planner.java`
+- `execution/src/main/java/dev/daisybase/execution/Execution.java`
+- `engine-api/src/main/java/dev/daisybase/engine/EngineApi.java`
+- `engine-api/src/main/java/dev/daisybase/engine/EmbeddedDatabaseEngine.java`
+- `engine-api/src/main/java/dev/daisybase/engine/RemoteProtocol.java`
+- `jdbc/src/main/java/dev/daisybase/jdbc/DaisyBaseConnection.java`
+- `jdbc/src/main/java/dev/daisybase/jdbc/DaisyBaseStatement.java`
+- `jdbc/src/main/java/dev/daisybase/jdbc/DaisyBasePreparedStatement.java`
+- `jdbc/src/main/java/dev/daisybase/jdbc/DaisyBaseDatabaseMetaData.java`
 
 ## 3. Recommended Phase Order
 
@@ -73,9 +73,9 @@ Why first:
 
 Primary files:
 
-- `sql-frontend/src/main/java/dev/javadb/sql/SqlFrontend.java`
-- `sql-frontend/src/main/java/dev/javadb/sql/ReferencePlsqlParserBridge.java`
-- `catalog/src/main/java/dev/javadb/catalog/Catalog.java`
+- `sql-frontend/src/main/java/dev/daisybase/sql/SqlFrontend.java`
+- `sql-frontend/src/main/java/dev/daisybase/sql/ReferencePlsqlParserBridge.java`
+- `catalog/src/main/java/dev/daisybase/catalog/Catalog.java`
 
 ### Phase B: Core Type System
 
@@ -87,7 +87,7 @@ After Phase A, land typed runtime values:
 
 Primary file:
 
-- `common/src/main/java/dev/javadb/common/Common.java`
+- `common/src/main/java/dev/daisybase/common/Common.java`
 
 Why second:
 
@@ -104,10 +104,10 @@ After the catalog and type model are stable, land durable state:
 
 Primary files:
 
-- `storage/src/main/java/dev/javadb/storage/Storage.java`
-- `storage/src/main/java/dev/javadb/storage/PagedTableStorage.java`
-- `storage/src/main/java/dev/javadb/storage/HeapStorageManager.java`
-- `engine-api/src/main/java/dev/javadb/engine/SequenceStore.java` new
+- `storage/src/main/java/dev/daisybase/storage/Storage.java`
+- `storage/src/main/java/dev/daisybase/storage/PagedTableStorage.java`
+- `storage/src/main/java/dev/daisybase/storage/HeapStorageManager.java`
+- `engine-api/src/main/java/dev/daisybase/engine/SequenceStore.java` new
 
 Why third:
 
@@ -126,10 +126,10 @@ After persistence is correct, add runtime semantics:
 
 Primary files:
 
-- `planner/src/main/java/dev/javadb/planner/Planner.java`
-- `planner/src/main/java/dev/javadb/planner/ReferenceQueries.java`
-- `execution/src/main/java/dev/javadb/execution/Execution.java`
-- `execution/src/main/java/dev/javadb/execution/ReferenceQueryExecution.java`
+- `planner/src/main/java/dev/daisybase/planner/Planner.java`
+- `planner/src/main/java/dev/daisybase/planner/ReferenceQueries.java`
+- `execution/src/main/java/dev/daisybase/execution/Execution.java`
+- `execution/src/main/java/dev/daisybase/execution/ReferenceQueryExecution.java`
 
 ### Phase E: Engine API, Metadata, And Remote Protocol
 
@@ -142,11 +142,11 @@ Only after the runtime semantics are real:
 
 Primary files:
 
-- `engine-api/src/main/java/dev/javadb/engine/EngineApi.java`
-- `engine-api/src/main/java/dev/javadb/engine/EmbeddedDatabaseEngine.java`
-- `engine-api/src/main/java/dev/javadb/engine/EngineIntrospection.java`
-- `engine-api/src/main/java/dev/javadb/engine/RemoteProtocol.java`
-- `server/src/main/java/dev/javadb/server/DatabaseProtocolServer.java`
+- `engine-api/src/main/java/dev/daisybase/engine/EngineApi.java`
+- `engine-api/src/main/java/dev/daisybase/engine/EmbeddedDatabaseEngine.java`
+- `engine-api/src/main/java/dev/daisybase/engine/EngineIntrospection.java`
+- `engine-api/src/main/java/dev/daisybase/engine/RemoteProtocol.java`
+- `server/src/main/java/dev/daisybase/server/DatabaseProtocolServer.java`
 
 ### Phase F: JDBC Completion
 
@@ -162,15 +162,15 @@ Only then:
 
 Primary files:
 
-- `jdbc/src/main/java/dev/javadb/jdbc/JavaDbConnection.java`
-- `jdbc/src/main/java/dev/javadb/jdbc/JavaDbStatement.java`
-- `jdbc/src/main/java/dev/javadb/jdbc/JavaDbPreparedStatement.java`
-- `jdbc/src/main/java/dev/javadb/jdbc/JavaDbPreparedSql.java`
-- `jdbc/src/main/java/dev/javadb/jdbc/JavaDbResultSets.java`
-- `jdbc/src/main/java/dev/javadb/jdbc/JavaDbDatabaseMetaData.java`
-- `jdbc/src/main/java/dev/javadb/jdbc/JavaDbParameterMetaData.java`
-- `jdbc/src/main/java/dev/javadb/jdbc/RemoteJavaDbTransport.java`
-- `jdbc/src/main/java/dev/javadb/jdbc/JavaDbCallableStatement.java` new
+- `jdbc/src/main/java/dev/daisybase/jdbc/DaisyBaseConnection.java`
+- `jdbc/src/main/java/dev/daisybase/jdbc/DaisyBaseStatement.java`
+- `jdbc/src/main/java/dev/daisybase/jdbc/DaisyBasePreparedStatement.java`
+- `jdbc/src/main/java/dev/daisybase/jdbc/DaisyBasePreparedSql.java`
+- `jdbc/src/main/java/dev/daisybase/jdbc/DaisyBaseResultSets.java`
+- `jdbc/src/main/java/dev/daisybase/jdbc/DaisyBaseDatabaseMetaData.java`
+- `jdbc/src/main/java/dev/daisybase/jdbc/DaisyBaseParameterMetaData.java`
+- `jdbc/src/main/java/dev/daisybase/jdbc/RemoteDaisyBaseTransport.java`
+- `jdbc/src/main/java/dev/daisybase/jdbc/DaisyBaseCallableStatement.java` new
 
 ## 4. Cross-Lane Risk Register
 

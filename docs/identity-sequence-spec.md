@@ -1,8 +1,8 @@
-# JavaDB Identity And Sequence Specification
+# DaisyBase Identity And Sequence Specification
 
 ## 1. Objective
 
-Add engine-native sequence objects and identity-backed columns so JavaDB can generate durable numeric keys inside the engine and expose them through JDBC `RETURN_GENERATED_KEYS` without client-side emulation.
+Add engine-native sequence objects and identity-backed columns so DaisyBase can generate durable numeric keys inside the engine and expose them through JDBC `RETURN_GENERATED_KEYS` without client-side emulation.
 
 This work must fit the existing architecture:
 

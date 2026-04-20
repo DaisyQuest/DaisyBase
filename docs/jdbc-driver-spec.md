@@ -1,11 +1,11 @@
-# JavaDB JDBC Driver Specification
+# DaisyBase JDBC Driver Specification
 
 ## 1. Objective
 
-Provide a production-usable JDBC 4.3 driver for JavaDB that supports:
+Provide a production-usable JDBC 4.3 driver for DaisyBase that supports:
 
 - embedded access to the in-process engine
-- remote access to the existing JavaDB protocol server
+- remote access to the existing DaisyBase protocol server
 - `DriverManager`, `DataSource`, and bounded `XADataSource` integration
 - JDBC statements, prepared statements, callable statements, result sets, transaction control, savepoints, generated keys, and metadata for the supported engine surface
 
@@ -19,7 +19,7 @@ Create a dedicated Gradle module:
 
 Package layout:
 
-- `dev.javadb.jdbc`
+- `dev.daisybase.jdbc`
   - URL parsing and driver bootstrap
   - JDBC facade types
   - transport abstraction
@@ -32,11 +32,11 @@ Package layout:
 Supported JDBC URLs:
 
 - Embedded:
-  - `jdbc:javadb:embedded:/absolute/path/to/db-home`
-  - `jdbc:javadb:embedded:relative/path`
+  - `jdbc:daisybase:embedded:/absolute/path/to/db-home`
+  - `jdbc:daisybase:embedded:relative/path`
 - Remote:
-  - `jdbc:javadb:remote://host`
-  - `jdbc:javadb:remote://host:15432`
+  - `jdbc:daisybase:remote://host`
+  - `jdbc:daisybase:remote://host:15432`
 
 Recognized properties:
 
@@ -65,22 +65,22 @@ Current authentication semantics:
 
 ### 4.1 Driver Registration
 
-- The driver class is `dev.javadb.jdbc.JavaDbDriver`.
+- The driver class is `dev.daisybase.jdbc.DaisyBaseDriver`.
 - The driver is auto-registered through `META-INF/services/java.sql.Driver`.
 - Manual registration through `Class.forName(...)` remains supported.
 
 ### 4.2 DataSource
 
-- `dev.javadb.jdbc.JavaDbDataSource` implements `javax.sql.DataSource`.
+- `dev.daisybase.jdbc.DaisyBaseDataSource` implements `javax.sql.DataSource`.
 - It supports both embedded and remote URLs.
 - It is serializable only if all stored configuration values are serializable primitives/strings.
 
 ### 4.3 XADataSource
 
-- `dev.javadb.jdbc.JavaDbXADataSource` implements `javax.sql.XADataSource`.
-- It exposes one `XAResource` per underlying JavaDB connection.
+- `dev.daisybase.jdbc.DaisyBaseXADataSource` implements `javax.sql.XADataSource`.
+- It exposes one `XAResource` per underlying DaisyBase connection.
 - The XA surface supports durable prepare/recover/commit/rollback.
-- It remains bounded to one active branch per physical JavaDB connection/session.
+- It remains bounded to one active branch per physical DaisyBase connection/session.
 
 ## 5. Connection Semantics
 
@@ -244,7 +244,7 @@ Metadata visibility:
 
 ### 9.2 Remote
 
-- Remote transport uses the JavaDB binary framed protocol.
+- Remote transport uses the DaisyBase binary framed protocol.
 - The protocol is extended to support:
   - transaction control requests
   - metadata requests

@@ -42,7 +42,7 @@ if [[ -z "$output_root" ]]; then
   output_root="$repo_root/installer/build/release"
 fi
 if [[ -z "$package_name" ]]; then
-  package_name="javadb-$version-linux-$(arch_name)"
+  package_name="daisybase-$version-linux-$(arch_name)"
 else
   package_name="$(basename "$package_name")"
 fi

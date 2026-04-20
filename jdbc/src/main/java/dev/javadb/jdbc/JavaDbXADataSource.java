@@ -1,5 +1,7 @@
 package dev.javadb.jdbc;
 
+import dev.daisybase.jdbc.DaisyBaseXADataSource;
+
 import javax.sql.XAConnection;
 import javax.sql.XADataSource;
 import java.io.PrintWriter;
@@ -7,13 +9,10 @@ import java.sql.SQLException;
 import java.util.logging.Logger;
 
 /**
- * XA-capable data source for JavaDB.
- *
- * <p>This implementation provides durable prepare/recover/commit/rollback semantics for one
- * active XA branch per underlying JavaDB connection.</p>
+ * Legacy compatibility wrapper for the pre-rebrand XA data source class name.
  */
 public final class JavaDbXADataSource implements XADataSource {
-    private final JavaDbDataSource delegate = new JavaDbDataSource();
+    private final DaisyBaseXADataSource delegate = new DaisyBaseXADataSource();
 
     public void setUrl(String url) {
         delegate.setUrl(url);
@@ -41,12 +40,12 @@ public final class JavaDbXADataSource implements XADataSource {
 
     @Override
     public XAConnection getXAConnection() throws SQLException {
-        return getXAConnection(getUser(), getPassword());
+        return delegate.getXAConnection();
     }
 
     @Override
     public XAConnection getXAConnection(String user, String password) throws SQLException {
-        return new JavaDbXAConnection((JavaDbConnection) delegate.getConnection(user, password));
+        return delegate.getXAConnection(user, password);
     }
 
     @Override

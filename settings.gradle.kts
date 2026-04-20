@@ -1,9 +1,11 @@
-rootProject.name = "javadb"
+rootProject.name = "daisybase"
 
 include(
     "common",
     "installer",
     "jdbc",
+    "orm",
+    "demo-business-app",
     "engine-api",
     "sql-frontend",
     "catalog",

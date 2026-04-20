@@ -1,4 +1,4 @@
-# JavaDB Routines, Functions, And CallableStatement Specification
+# DaisyBase Routines, Functions, And CallableStatement Specification
 
 ## 1. Objective
 

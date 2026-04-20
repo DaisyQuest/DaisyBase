@@ -4,7 +4,7 @@ Date: 2026-04-19
 
 ## Scope
 
-This review covers the JavaDB JDBC driver as implemented in:
+This review covers the DaisyBase JDBC driver as implemented in:
 
 - `:jdbc`
 - `:engine-api`
@@ -80,7 +80,7 @@ The driver is now credible for a practical JDBC 4.3 subset:
 
 8. XA remained unavailable.
    Impact:
-   - coordinators expecting `XADataSource` integration could not enlist JavaDB at all
+   - coordinators expecting `XADataSource` integration could not enlist DaisyBase at all
    Resolution:
    - the driver now exposes a durable prepared-branch `XADataSource` / `XAConnection` / `XAResource` implementation with recovery scans and restart-safe two-phase commit/rollback
 
@@ -124,7 +124,7 @@ The driver is now credible for a practical JDBC 4.3 subset:
   - the server authenticates against catalog users with hashed passwords
   - sessions enforce explicit grants, including role-derived grants
 - XA remains bounded
-  - one `XAResource` still maps to one JavaDB connection/session at a time
+  - one `XAResource` still maps to one DaisyBase connection/session at a time
   - durable prepare/recover/commit/rollback are implemented
   - interleaved multi-branch work on one connection and full distributed transaction manager integration remain out of scope
 

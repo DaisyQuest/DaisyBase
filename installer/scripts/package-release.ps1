@@ -43,7 +43,7 @@ $resolvedOutputRoot = if ($OutputRoot) {
 $safePackageName = if ($PackageName) {
     [System.IO.Path]::GetFileName($PackageName)
 } else {
-    "javadb-$version-windows-$(Get-Arch)"
+    "daisybase-$version-windows-$(Get-Arch)"
 }
 $stageParent = Join-Path $resolvedOutputRoot "staging"
 $archiveParent = Join-Path $resolvedOutputRoot "archives"

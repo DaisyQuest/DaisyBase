@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DaisyBase Documentation Portal</title>
+  <meta name="description" content="Accessible documentation portal for DaisyBase, its architecture, installers, JDBC driver, demo business app, and MCP description system.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+  <header class="site-header">
+    <p class="eyebrow">DaisyBase Documentation</p>
+    <h1>Readable, Accessible, and Honest</h1>
+    <p class="lede">This portal is the top-level map for the DaisyBase product, codebase, operational model, compatibility surface, and MCP description system.</p>
+    <nav aria-label="Primary">
+      <ul class="nav-list">
+        <li><a href="../README.md">Handbook Index</a></li>
+        <li><a href="../guides/read-me-first.md">Read Me First</a></li>
+        <li><a href="../50-point-documentation-plan.md">50-Point Plan</a></li>
+        <li><a href="../mcp-description-system.md">MCP Description System</a></li>
+        <li><a href="../../installer/README.md">Installer Guide</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main id="main-content">
+    <section aria-labelledby="coverage-title" class="panel hero-panel">
+      <h2 id="coverage-title">Coverage Promise</h2>
+      <p>The documentation set covers product framing, setup, architecture, runtime surfaces, SQL, JDBC, storage, WAL, operations, security, quality, the demo application, and known limits. The same structure is available through a machine-readable MCP server.</p>
+    </section>
+
+    <section aria-labelledby="start-title" class="panel">
+      <h2 id="start-title">Start Here</h2>
+      <div class="card-grid">
+        <article class="card">
+          <h3><a href="../guides/read-me-first.md">Read Me First</a></h3>
+          <p>Short, plain-language orientation for what DaisyBase is, how to run it, and what is intentionally bounded.</p>
+        </article>
+        <article class="card">
+          <h3><a href="../getting-started/quickstart.md">Quickstart</a></h3>
+          <p>Fast path for embedded, server, CLI, and demo use.</p>
+        </article>
+        <article class="card">
+          <h3><a href="../getting-started/installers.md">Installers</a></h3>
+          <p>Windows and Linux, GUI and headless, including the demo-business installer profile.</p>
+        </article>
+        <article class="card">
+          <h3><a href="../architecture/system-overview.md">Architecture</a></h3>
+          <p>Top-level system shape, durability model, transaction model, and internal layers.</p>
+        </article>
+        <article class="card">
+          <h3><a href="../reference/jdbc-surface.md">JDBC</a></h3>
+          <p>Supported JDBC behavior, bounded areas, and how to reason about conformance.</p>
+        </article>
+        <article class="card">
+          <h3><a href="../reference/orm-tooling.md">ORM Tooling</a></h3>
+          <p>Annotation-driven entities, CRUD helpers, code generation, and the ORM MCP server.</p>
+        </article>
+      </div>
+    </section>
+
+    <section aria-labelledby="guides-title" class="panel">
+      <h2 id="guides-title">Readable Guides</h2>
+      <div class="card-grid">
+        <article class="card">
+          <h3><a href="../guides/choose-your-runtime.md">Choose Your Runtime</a></h3>
+          <p>Pick embedded mode, server mode, the demo stack, or JDBC plus ORM with a clear tradeoff guide.</p>
+        </article>
+        <article class="card">
+          <h3><a href="../guides/how-daisybase-thinks.md">How DaisyBase Thinks</a></h3>
+          <p>The practical rules behind parsing, planning, storage, recovery, and bounded feature support.</p>
+        </article>
+        <article class="card">
+          <h3><a href="../guides/building-an-app-with-jdbc-and-orm.md">Build an App with JDBC and ORM</a></h3>
+          <p>Where the ORM is useful, where JDBC is still the right tool, and how to combine them.</p>
+        </article>
+      </div>
+    </section>
+
+    <section aria-labelledby="map-title" class="panel">
+      <h2 id="map-title">Documentation Map</h2>
+      <div class="split-grid">
+        <div>
+          <h3>Readable Guides</h3>
+          <ul>
+            <li><a href="../guides/read-me-first.md">Read Me First</a></li>
+            <li><a href="../guides/choose-your-runtime.md">Choose Your Runtime</a></li>
+            <li><a href="../guides/how-daisybase-thinks.md">How DaisyBase Thinks</a></li>
+            <li><a href="../guides/building-an-app-with-jdbc-and-orm.md">Building an App with JDBC and ORM</a></li>
+          </ul>
+          <h3>Getting Started</h3>
+          <ul>
+            <li><a href="../getting-started/quickstart.md">Quickstart</a></li>
+            <li><a href="../getting-started/installers.md">Installer Guide</a></li>
+          </ul>
+          <h3>Architecture</h3>
+          <ul>
+            <li><a href="../architecture/system-overview.md">System Overview</a></li>
+            <li><a href="../architecture/module-map.md">Module Map</a></li>
+            <li><a href="../architecture/storage-recovery.md">Storage and Recovery</a></li>
+            <li><a href="../architecture/query-lifecycle.md">Query Lifecycle</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Reference</h3>
+          <ul>
+            <li><a href="../reference/runtime-surfaces.md">Runtime Surfaces</a></li>
+            <li><a href="../reference/sql-surface.md">SQL Surface</a></li>
+            <li><a href="../reference/jdbc-surface.md">JDBC Surface</a></li>
+            <li><a href="../reference/orm-tooling.md">ORM Tooling</a></li>
+            <li><a href="../reference/security-and-distributed-xa.md">Security and Distributed XA</a></li>
+            <li><a href="../reference/operations-runbook.md">Operations Runbook</a></li>
+            <li><a href="../reference/testing-and-quality.md">Testing and Quality</a></li>
+            <li><a href="../reference/demo-business-app.md">Demo Business App</a></li>
+            <li><a href="../reference/known-limits-and-roadmap.md">Known Limits and Roadmap</a></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="accessibility-title" class="panel">
+      <h2 id="accessibility-title">Accessibility Commitments</h2>
+      <ul>
+        <li>Keyboard navigation starts with a skip link and visible focus state.</li>
+        <li>Color is never the only carrier of meaning.</li>
+        <li>Link labels describe destinations directly.</li>
+        <li>Typography, contrast, and spacing are tuned for long-form technical reading.</li>
+        <li>Motion is minimal and disabled further when reduced motion is requested.</li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="machine-title" class="panel">
+      <h2 id="machine-title">Machine-Readable Layer</h2>
+      <p>The MCP description system mirrors the human docs. It exposes structured resources and tools for modules, runtime surfaces, ORM tooling, limits, and the 50-point coverage plan.</p>
+      <p><a href="../mcp-description-system.md">Open the MCP description system guide</a></p>
+      <p><a href="../../tools/daisybase-orm-mcp/README.md">Open the ORM MCP server guide</a></p>
+    </section>
+  </main>
+</body>
+</html>

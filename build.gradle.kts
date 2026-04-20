@@ -7,12 +7,73 @@ plugins {
 }
 
 allprojects {
-    group = "dev.javadb"
+    group = "dev.daisybase"
     version = "0.1.0-SNAPSHOT"
 
     repositories {
         mavenCentral()
     }
+}
+
+val requiredDocumentationFiles = listOf(
+    "README.md",
+    "docs/README.md",
+    "docs/50-point-documentation-plan.md",
+    "docs/guides/read-me-first.md",
+    "docs/guides/choose-your-runtime.md",
+    "docs/guides/how-daisybase-thinks.md",
+    "docs/guides/building-an-app-with-jdbc-and-orm.md",
+    "docs/getting-started/quickstart.md",
+    "docs/getting-started/installers.md",
+    "docs/architecture/system-overview.md",
+    "docs/architecture/module-map.md",
+    "docs/architecture/storage-recovery.md",
+    "docs/architecture/query-lifecycle.md",
+    "docs/reference/runtime-surfaces.md",
+    "docs/reference/sql-surface.md",
+    "docs/reference/jdbc-surface.md",
+    "docs/reference/security-and-distributed-xa.md",
+    "docs/reference/operations-runbook.md",
+    "docs/reference/testing-and-quality.md",
+    "docs/reference/demo-business-app.md",
+    "docs/reference/orm-tooling.md",
+    "docs/reference/known-limits-and-roadmap.md",
+    "docs/site/index.html",
+    "docs/site/styles.css",
+    "docs/system/daisybase-system-catalog.json",
+    "docs/mcp-description-system.md",
+    "tools/daisybase-system-mcp/README.md",
+    "tools/daisybase-system-mcp/server.py",
+    "tools/daisybase-system-mcp/test_server.py",
+    "tools/daisybase-orm-mcp/README.md",
+    "tools/daisybase-orm-mcp/server.py",
+    "tools/daisybase-orm-mcp/test_server.py",
+    "scripts/validate-docs.ps1",
+    "scripts/validate-docs.sh"
+)
+
+tasks.register("validateDocs") {
+    description = "Validates the documentation system layout and accessibility anchors."
+    group = "verification"
+
+    doLast {
+        requiredDocumentationFiles.forEach { relativePath ->
+            val artifact = rootProject.file(relativePath)
+            check(artifact.exists()) { "Missing documentation artifact: $relativePath" }
+        }
+
+        val portal = rootProject.file("docs/site/index.html").readText()
+        check("Skip to main content" in portal) { "Docs portal is missing the skip link." }
+        check("id=\"main-content\"" in portal) { "Docs portal is missing the main content landmark." }
+
+        val catalog = rootProject.file("docs/system/daisybase-system-catalog.json").readText()
+        check("\"implementedPoints\": 50" in catalog) { "Documentation coverage plan count is not 50." }
+        check("\"modules\"" in catalog) { "System catalog is missing module data." }
+    }
+}
+
+tasks.named("check") {
+    dependsOn("validateDocs")
 }
 
 subprojects {
@@ -90,7 +151,7 @@ project(":common")
 
 project(":installer") {
     apply(plugin = "application")
-    the<JavaApplication>().mainClass.set("dev.javadb.installer.InstallerMain")
+    the<JavaApplication>().mainClass.set("dev.daisybase.installer.InstallerMain")
 }
 
 project(":jdbc") {
@@ -99,6 +160,36 @@ project(":jdbc") {
         api(project(":engine-api"))
         implementation(project(":catalog"))
         implementation(project(":server"))
+    }
+}
+
+project(":orm") {
+    apply(plugin = "application")
+    the<JavaApplication>().mainClass.set("dev.daisybase.orm.DaisyBaseOrmCli")
+
+    dependencies {
+        api(project(":jdbc"))
+        implementation(project(":common"))
+        implementation("com.fasterxml.jackson.core:jackson-databind:2.18.2")
+        testImplementation(project(":engine-api"))
+    }
+}
+
+project(":demo-business-app") {
+    apply(plugin = "war")
+
+    dependencies {
+        implementation(project(":jdbc"))
+        implementation(project(":engine-api"))
+        implementation(project(":common"))
+        compileOnly("jakarta.platform:jakarta.jakartaee-web-api:10.0.0")
+        testImplementation("jakarta.platform:jakarta.jakartaee-web-api:10.0.0")
+        testImplementation(project(":jdbc"))
+        testImplementation(project(":engine-api"))
+    }
+
+    tasks.named<org.gradle.api.tasks.bundling.War>("war") {
+        archiveBaseName.set("daisybase-demo-business")
     }
 }
 
@@ -123,7 +214,7 @@ project(":sql-frontend") {
             }
             rule {
                 element = "CLASS"
-                includes = listOf("dev.javadb.sql.SqlFrontend\$Parser")
+                includes = listOf("dev.daisybase.sql.SqlFrontend\$Parser")
                 limit {
                     counter = "LINE"
                     value = "COVEREDRATIO"
@@ -151,7 +242,7 @@ project(":storage") {
         violationRules {
             rule {
                 element = "CLASS"
-                includes = listOf("dev.javadb.storage.HeapStorageManager")
+                includes = listOf("dev.daisybase.storage.HeapStorageManager")
                 limit {
                     counter = "LINE"
                     value = "COVEREDRATIO"
@@ -175,7 +266,7 @@ project(":wal") {
         violationRules {
             rule {
                 element = "CLASS"
-                includes = listOf("dev.javadb.wal.Wal\$WalManager")
+                includes = listOf("dev.daisybase.wal.Wal\$WalManager")
                 limit {
                     counter = "LINE"
                     value = "COVEREDRATIO"
@@ -199,7 +290,7 @@ project(":engine-api") {
         violationRules {
             rule {
                 element = "CLASS"
-                includes = listOf("dev.javadb.engine.RemoteProtocol")
+                includes = listOf("dev.daisybase.engine.RemoteProtocol")
                 limit {
                     counter = "LINE"
                     value = "COVEREDRATIO"
@@ -292,7 +383,7 @@ project(":server") {
     dependencies {
         implementation(project(":engine-api"))
     }
-    the<JavaApplication>().mainClass.set("dev.javadb.server.ServerRuntime")
+    the<JavaApplication>().mainClass.set("dev.daisybase.server.ServerRuntime")
 }
 
 project(":cli") {
@@ -300,7 +391,7 @@ project(":cli") {
     dependencies {
         implementation(project(":engine-api"))
     }
-    the<JavaApplication>().mainClass.set("dev.javadb.cli.CliMain")
+    the<JavaApplication>().mainClass.set("dev.daisybase.cli.CliMain")
 }
 
 project(":testkit") {

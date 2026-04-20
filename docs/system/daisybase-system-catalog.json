@@ -1,0 +1,76 @@
+{
+  "product": {
+    "name": "DaisyBase",
+    "version": "0.1.0-SNAPSHOT",
+    "description": "Custom Java 21 relational database system with embedded, server, JDBC, installer, and demo-business surfaces."
+  },
+  "modules": [
+    {"name": "common", "path": "common", "responsibility": "Shared types, values, identifiers, and primitive contracts."},
+    {"name": "sql-frontend", "path": "sql-frontend", "responsibility": "Parser, AST, diagnostics, and reference PL/SQL bridge."},
+    {"name": "catalog", "path": "catalog", "responsibility": "Durable metadata for schemas, tables, indexes, routines, sequences, users, roles, and grants."},
+    {"name": "planner", "path": "planner", "responsibility": "Binding, parameter inference, logical planning, and physical selection."},
+    {"name": "execution", "path": "execution", "responsibility": "Runtime operators, DML, joins, aggregates, routines, and generated-key flows."},
+    {"name": "storage", "path": "storage", "responsibility": "Paged heap persistence, overflow storage, page images, and recovery-facing state."},
+    {"name": "txn", "path": "txn", "responsibility": "Transactions, snapshots, savepoints, and XA branch state."},
+    {"name": "wal", "path": "wal", "responsibility": "WAL append, metadata, checkpoints, and restart primitives."},
+    {"name": "index", "path": "index", "responsibility": "Index metadata and maintenance responsibilities."},
+    {"name": "engine-api", "path": "engine-api", "responsibility": "Embedded runtime, transport, metadata, sequences, routines, and XA integration."},
+    {"name": "server", "path": "server", "responsibility": "Binary protocol server runtime."},
+    {"name": "cli", "path": "cli", "responsibility": "Interactive shell and operator entry point."},
+    {"name": "jdbc", "path": "jdbc", "responsibility": "JDBC driver, metadata, callable support, updatable result sets, and XA APIs."},
+    {"name": "orm", "path": "orm", "responsibility": "Annotation-based entity mapping, CRUD helpers, schema introspection, and source generation."},
+    {"name": "installer", "path": "installer", "responsibility": "Core installer, demo installer, and packaging helpers."},
+    {"name": "demo-business-app", "path": "demo-business-app", "responsibility": "TomEE enterprise demo using DaisyBase and the JDBC driver."},
+    {"name": "testkit", "path": "testkit", "responsibility": "Test utilities and reusable engine fixtures."},
+    {"name": "bench", "path": "bench", "responsibility": "Benchmark harness and performance workloads."}
+  ],
+  "surfaces": [
+    {"name": "embedded-engine", "description": "In-process engine API for applications, tests, and benchmarks."},
+    {"name": "server", "description": "Remote access over the DaisyBase binary protocol."},
+    {"name": "cli", "description": "Interactive shell for SQL execution and explain workflows."},
+    {"name": "jdbc", "description": "JDBC driver for embedded and remote DaisyBase usage."},
+    {"name": "orm", "description": "Annotation-driven entity mapping, repository helpers, and schema-to-code generation over JDBC."},
+    {"name": "installer", "description": "Windows and Linux installers with GUI and headless paths."},
+    {"name": "demo-business-app", "description": "TomEE-hosted backend and frontend demo enterprise application."}
+  ],
+  "docs": [
+    {"slug": "handbook", "title": "Documentation Handbook", "path": "docs/README.md"},
+    {"slug": "read-me-first", "title": "Read Me First", "path": "docs/guides/read-me-first.md"},
+    {"slug": "choose-your-runtime", "title": "Choose Your Runtime", "path": "docs/guides/choose-your-runtime.md"},
+    {"slug": "how-daisybase-thinks", "title": "How DaisyBase Thinks", "path": "docs/guides/how-daisybase-thinks.md"},
+    {"slug": "jdbc-and-orm-guide", "title": "Building an App with JDBC and ORM", "path": "docs/guides/building-an-app-with-jdbc-and-orm.md"},
+    {"slug": "quickstart", "title": "Quickstart", "path": "docs/getting-started/quickstart.md"},
+    {"slug": "installers", "title": "Installer Guide", "path": "docs/getting-started/installers.md"},
+    {"slug": "system-overview", "title": "System Overview", "path": "docs/architecture/system-overview.md"},
+    {"slug": "module-map", "title": "Module Map", "path": "docs/architecture/module-map.md"},
+    {"slug": "storage-recovery", "title": "Storage and Recovery", "path": "docs/architecture/storage-recovery.md"},
+    {"slug": "query-lifecycle", "title": "Query Lifecycle", "path": "docs/architecture/query-lifecycle.md"},
+    {"slug": "runtime-surfaces", "title": "Runtime Surfaces", "path": "docs/reference/runtime-surfaces.md"},
+    {"slug": "sql-surface", "title": "SQL Surface", "path": "docs/reference/sql-surface.md"},
+    {"slug": "jdbc-surface", "title": "JDBC Surface", "path": "docs/reference/jdbc-surface.md"},
+    {"slug": "orm-tooling", "title": "ORM Tooling", "path": "docs/reference/orm-tooling.md"},
+    {"slug": "security-and-xa", "title": "Security and Distributed XA", "path": "docs/reference/security-and-distributed-xa.md"},
+    {"slug": "operations-runbook", "title": "Operations Runbook", "path": "docs/reference/operations-runbook.md"},
+    {"slug": "testing-and-quality", "title": "Testing and Quality", "path": "docs/reference/testing-and-quality.md"},
+    {"slug": "demo-business-app", "title": "Demo Business App", "path": "docs/reference/demo-business-app.md"},
+    {"slug": "known-limits", "title": "Known Limits and Roadmap", "path": "docs/reference/known-limits-and-roadmap.md"},
+    {"slug": "plan-50", "title": "50-Point Documentation Plan", "path": "docs/50-point-documentation-plan.md"},
+    {"slug": "mcp-system", "title": "MCP Description System", "path": "docs/mcp-description-system.md"},
+    {"slug": "orm-mcp-server", "title": "ORM MCP Server", "path": "tools/daisybase-orm-mcp/README.md"}
+  ],
+  "mcpServers": [
+    {"name": "daisybase-system-mcp", "path": "tools/daisybase-system-mcp/server.py", "responsibility": "Machine-readable map of the documented DaisyBase product surface."},
+    {"name": "daisybase-orm-mcp", "path": "tools/daisybase-orm-mcp/server.py", "responsibility": "Schema introspection and ORM code generation tools exposed over MCP."}
+  ],
+  "knownLimits": [
+    "SQL breadth remains intentionally bounded and explicitly documented as such.",
+    "Storage and recovery are real but still have evolution runway.",
+    "Installer upgrade-in-place and uninstall are not yet fully automated.",
+    "XA and security are implemented but bounded in enterprise depth.",
+    "The PL/SQL bridge is an overlap aid rather than blanket PL/SQL compatibility."
+  ],
+  "coveragePlan": {
+    "implementedPoints": 50,
+    "source": "docs/50-point-documentation-plan.md"
+  }
+}

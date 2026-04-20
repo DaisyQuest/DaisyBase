@@ -1,4 +1,4 @@
-# JavaDB Typed Decimal And Temporal Specification
+# DaisyBase Typed Decimal And Temporal Specification
 
 ## 1. Objective
 
