@@ -10,7 +10,7 @@ Use the server runtime when sessions connect over the DaisyBase binary protocol.
 
 ## CLI
 
-The CLI is the interactive operator and developer surface for statement execution, explain output, and smoke validation.
+The CLI is the interactive operator and developer surface for statement execution, explain output, smoke validation, and high-throughput file-driven imports. Use `cli load --file <rows.csv> --sql "INSERT INTO target VALUES (?, ?)"` when you want the shell to stream delimited rows through the engine's prepared execution path with configurable delimiters, batch commits, null tokens, and error thresholds.
 
 ## JDBC
 

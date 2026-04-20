@@ -491,6 +491,7 @@ project(":cli") {
     apply(plugin = "application")
     dependencies {
         implementation(project(":engine-api"))
+        testImplementation(project(":testkit"))
     }
     the<JavaApplication>().mainClass.set("dev.daisybase.cli.CliMain")
 }
