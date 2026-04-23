@@ -73,6 +73,8 @@ bash ./gradlew --no-daemon githubPagesSite
 
 The generated Pages site lands in `build/gh-pages/` and includes the portal, themed module Javadocs, and a generated API atlas for the full public Java surface.
 
+Build-time package publication is documented in [docs/buildtime-packages.md](docs/buildtime-packages.md).
+
 ## Repository Guide
 
 The codebase is organized as a multi-module Gradle build:

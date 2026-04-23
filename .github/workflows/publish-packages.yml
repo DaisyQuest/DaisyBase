@@ -1,0 +1,49 @@
+name: Publish DaisyBase Packages
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: Build, test, and publish modules
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout DaisyBase
+        uses: actions/checkout@v5
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Build and publish packages
+        run: ./gradlew --no-daemon clean build publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: daisybase-build-artifacts
+          path: |
+            */build/libs/*.jar
+            */build/libs/*.war
+            */build/distributions/*.zip
+            */build/distributions/*.tar
+          if-no-files-found: error

@@ -1,4 +1,6 @@
 import groovy.json.JsonOutput
+import org.gradle.api.publish.PublishingExtension
+import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
 import org.gradle.testing.jacoco.tasks.JacocoReport
 import org.gradle.api.tasks.Sync
@@ -86,7 +88,7 @@ plugins {
 
 allprojects {
     group = "dev.daisybase"
-    version = "0.1.0-SNAPSHOT"
+    version = providers.gradleProperty("version").orElse("0.1.0-SNAPSHOT").get()
 
     repositories {
         mavenCentral()
@@ -168,6 +170,7 @@ tasks.named("check") {
 subprojects {
     apply(plugin = "java-library")
     apply(plugin = "jacoco")
+    apply(plugin = "maven-publish")
 
     java {
         toolchain {
@@ -175,6 +178,40 @@ subprojects {
         }
         withSourcesJar()
         withJavadocJar()
+    }
+
+    extensions.configure<PublishingExtension>("publishing") {
+        publications {
+            create<MavenPublication>("mavenJava") {
+                artifactId = project.name
+                from(components["java"])
+
+                pom {
+                    name.set("DaisyBase ${project.name}")
+                    description.set("DaisyBase module ${project.path} for build-time integration.")
+                    url.set("https://github.com/DaisyQuest/DaisyBase")
+                }
+            }
+        }
+
+        repositories {
+            maven {
+                name = "GitHubPackages"
+                url = uri("https://maven.pkg.github.com/DaisyQuest/DaisyBase")
+                credentials {
+                    username = providers.gradleProperty("gpr.user")
+                        .orElse(providers.environmentVariable("GITHUB_ACTOR"))
+                        .orElse(providers.environmentVariable("GITHUB_USERNAME"))
+                        .orElse("not-set")
+                        .get()
+                    password = providers.gradleProperty("gpr.key")
+                        .orElse(providers.environmentVariable("GITHUB_TOKEN"))
+                        .orElse(providers.environmentVariable("GITHUB_PACKAGES_TOKEN"))
+                        .orElse("not-set")
+                        .get()
+                }
+            }
+        }
     }
 
     tasks.withType<JavaCompile>().configureEach {
