@@ -20,7 +20,9 @@ import java.sql.SQLException;
 import java.sql.SQLInvalidAuthorizationSpecException;
 import java.sql.Statement;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -336,7 +338,9 @@ class RemoteJdbcDriverTest {
             for (int attempt = 0; attempt < 5 && !cancelledObserved; attempt++) {
                 try (Statement statement = connection.createStatement()) {
                     AtomicReference<Throwable> failure = new AtomicReference<>();
+                    CountDownLatch executionStarting = new CountDownLatch(1);
                     Thread worker = Thread.ofVirtual().start(() -> {
+                        executionStarting.countDown();
                         try (ResultSet ignored = statement.executeQuery("""
                                 SELECT id
                                 FROM slow_rows
@@ -352,7 +356,8 @@ class RemoteJdbcDriverTest {
                         }
                     });
 
-                    Thread.sleep(1L);
+                    assertTrue(executionStarting.await(10, TimeUnit.SECONDS), "Worker thread should start");
+                    Thread.sleep(5L); // Allow the execute request to reach and be registered on the server
                     statement.cancel();
                     worker.join();
 
